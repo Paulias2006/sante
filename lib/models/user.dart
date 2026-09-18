@@ -9,6 +9,9 @@ class User {
   final String? entiteType; // 'clinique' | 'pharmacie'
   final String? patientId;
   final bool actif;
+  final String telephone;
+  final String adresse;
+  final bool notificationsEnabled;
 
   User({
     required this.id,
@@ -20,6 +23,9 @@ class User {
     this.entiteType,
     this.patientId,
     this.actif = true,
+    this.telephone = '',
+    this.adresse = '',
+    this.notificationsEnabled = true,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -33,6 +39,9 @@ class User {
       entiteType: json['entiteType'],
       patientId: json['patientId'] ?? json['patient_id'],
       actif: json['actif'] ?? true,
+      telephone: json['telephone'] ?? '',
+      adresse: json['adresse'] ?? '',
+      notificationsEnabled: json['notificationsEnabled'] ?? true,
     );
   }
 
@@ -47,6 +56,9 @@ class User {
       'entiteType': entiteType,
       'patientId': patientId,
       'actif': actif,
+      'telephone': telephone,
+      'adresse': adresse,
+      'notificationsEnabled': notificationsEnabled,
     };
   }
 

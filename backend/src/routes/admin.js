@@ -175,7 +175,13 @@ router.patch('/cartes/:id/status', async (req, res) => {
 
 router.get('/logs', async (req, res) => {
   try {
-    const logs = await Log.find().populate('user', 'nom prenom email role').sort({ timestamp: -1 }).limit(100);
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const logs = await Log.find()
+      .populate('user', 'nom prenom email role')
+      .sort({ timestamp: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
     res.json(logs);
   } catch (error) {
     res.status(500).json({ message: 'Erreur récupération logs', error: error.message });

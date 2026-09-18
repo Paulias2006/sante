@@ -32,10 +32,6 @@ class ApiService {
 
   // Auth endpoints
   Future<Map<String, dynamic>> login(String email, String password) async {
-    // Debug log for tracing login attempts in browser console
-    // ignore: avoid_print
-    print('ApiService.login called for: $email');
-
     late final Response<dynamic> response;
     try {
       response = await _dio.post(
@@ -49,11 +45,6 @@ class ApiService {
             : 'Connexion réseau impossible. Vérifiez l’adresse API et le téléphone.',
       );
     }
-
-    // ignore: avoid_print
-    print(
-      'ApiService.login response status: ${response.statusCode}, data: ${response.data}',
-    );
 
     if (response.statusCode == 200) {
       final data = response.data;
@@ -85,6 +76,28 @@ class ApiService {
     } else {
       throw Exception(response.data['message'] ?? 'Registration failed');
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getApprovedClinics() async {
+    final response = await _dio.get('/inscription/cliniques');
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(response.data ?? []);
+    }
+    throw Exception(
+      response.data['message'] ?? 'Impossible de charger les établissements',
+    );
+  }
+
+  Future<Map<String, dynamic>> registerPatient(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post('/inscription/patient', data: payload);
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(
+      response.data['message'] ?? 'Inscription patient impossible',
+    );
   }
 
   Future<void> logout() async {
@@ -143,8 +156,14 @@ class ApiService {
   }
 
   // Patient endpoints
-  Future<Map<String, dynamic>> getPatientDossier(String patientId) async {
-    final response = await _dio.get('/patients/$patientId');
+  Future<Map<String, dynamic>> getPatientDossier(
+    String patientId, {
+    String accessReason = 'CONSULTATION_DOSSIER',
+  }) async {
+    final response = await _dio.get(
+      '/patients/$patientId',
+      queryParameters: {'accessReason': accessReason},
+    );
     if (response.statusCode == 200) {
       return Map<String, dynamic>.from(response.data ?? {});
     } else {
@@ -195,6 +214,24 @@ class ApiService {
     } else {
       throw Exception(response.data['message'] ?? 'QR patient invalide');
     }
+  }
+
+  Future<Map<String, dynamic>> revokePatientQr(String patientId) async {
+    final response = await _dio.patch('/patients/$patientId/qr/revoke');
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(response.data['message'] ?? 'Impossible de révoquer le QR');
+  }
+
+  Future<Map<String, dynamic>> rotatePatientQr(String patientId) async {
+    final response = await _dio.post('/patients/$patientId/qr/rotate');
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(
+      response.data['message'] ?? 'Impossible de régénérer le QR',
+    );
   }
 
   Future<Map<String, dynamic>> getAdminStats() async {
@@ -326,13 +363,36 @@ class ApiService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getPharmacyDeliveries() async {
-    final response = await _dio.get('/pharmacie/delivrances');
+  Future<List<Map<String, dynamic>>> getPharmacyDeliveries({
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final response = await _dio.get(
+      '/pharmacie/delivrances',
+      queryParameters: {
+        if (from != null) 'from': from.toIso8601String(),
+        if (to != null) 'to': to.toIso8601String(),
+      },
+    );
     if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(response.data ?? []);
     } else {
       throw Exception(response.data['message'] ?? 'Failed to fetch deliveries');
     }
+  }
+
+  Future<Map<String, dynamic>> returnPharmacyDelivery(
+    String id,
+    String reason,
+  ) async {
+    final response = await _dio.patch(
+      '/pharmacie/delivrances/$id/return',
+      data: {'reason': reason},
+    );
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(response.data['message'] ?? 'Retour impossible');
   }
 
   Future<Map<String, dynamic>> getPharmacyStats() async {
@@ -416,6 +476,40 @@ class ApiService {
         response.data['message'] ?? 'Failed to fetch ordonnances',
       );
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getClinicAnalyses() async {
+    final response = await _dio.get('/analyses');
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(response.data ?? []);
+    }
+    throw Exception(response.data['message'] ?? 'Failed to fetch analyses');
+  }
+
+  Future<Map<String, dynamic>> createAnalyse(Map<String, dynamic> data) async {
+    final response = await _dio.post('/analyses', data: data);
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(response.data['message'] ?? 'Failed to create analyse');
+  }
+
+  Future<List<Map<String, dynamic>>> getClinicRendezVous() async {
+    final response = await _dio.get('/rendezvous');
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(response.data ?? []);
+    }
+    throw Exception(response.data['message'] ?? 'Failed to fetch appointments');
+  }
+
+  Future<Map<String, dynamic>> createRendezVous(
+    Map<String, dynamic> data,
+  ) async {
+    final response = await _dio.post('/rendezvous', data: data);
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(response.data['message'] ?? 'Failed to create appointment');
   }
 
   // Token management

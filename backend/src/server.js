@@ -9,13 +9,18 @@ const patientRoutes = require('./routes/patients');
 const adminRoutes = require('./routes/admin');
 const consultationRoutes = require('./routes/consultations');
 const ordonnanceRoutes = require('./routes/ordonnances');
+const analyseRoutes = require('./routes/analyses');
+const rendezVousRoutes = require('./routes/rendezvous');
 const pharmacieRoutes = require('./routes/pharmacies');
 const inscriptionRoutes = require('./routes/inscription');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : true;
 
-app.use(cors());
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -30,6 +35,8 @@ app.use('/api/admin', authenticate, adminRoutes);
 app.use('/api/patients', authenticate, patientRoutes);
 app.use('/api/consultations', authenticate, consultationRoutes);
 app.use('/api/ordonnances', authenticate, ordonnanceRoutes);
+app.use('/api/analyses', authenticate, analyseRoutes);
+app.use('/api/rendezvous', authenticate, rendezVousRoutes);
 app.use('/api/pharmacie', authenticate, pharmacieRoutes);
 
 app.use((err, req, res, next) => {

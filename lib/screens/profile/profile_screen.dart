@@ -18,6 +18,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _notificationsEnabled = true;
   bool _appearanceEnabled = false;
   bool _securityEnabled = true;
+  final _nomController = TextEditingController();
+  final _prenomController = TextEditingController();
+  final _telephoneController = TextEditingController();
+  final _adresseController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nomController.dispose();
+    _prenomController.dispose();
+    _telephoneController.dispose();
+    _adresseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _editProfile(User user) async {
+    _nomController.text = user.nom;
+    _prenomController.text = user.prenom;
+    _telephoneController.text = user.telephone;
+    _adresseController.text = user.adresse;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modifier le profil'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _prenomController,
+                decoration: const InputDecoration(labelText: 'Prénom'),
+              ),
+              TextField(
+                controller: _nomController,
+                decoration: const InputDecoration(labelText: 'Nom'),
+              ),
+              TextField(
+                controller: _telephoneController,
+                decoration: const InputDecoration(labelText: 'Téléphone'),
+              ),
+              TextField(
+                controller: _adresseController,
+                decoration: const InputDecoration(labelText: 'Adresse'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    try {
+      await ref.read(apiServiceProvider).updateMyProfile({
+        'nom': _nomController.text.trim(),
+        'prenom': _prenomController.text.trim(),
+        'telephone': _telephoneController.text.trim(),
+        'adresse': _adresseController.text.trim(),
+      });
+      await ref.read(authStateProvider.notifier).refreshUser();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profil mis à jour.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
 
   String _roleLabel(String role) {
     switch (role.toLowerCase()) {
@@ -181,6 +259,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  if (currentUser != null)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: () => _editProfile(currentUser),
+                        icon: const Icon(Icons.edit_rounded),
+                        label: const Text('Modifier le profil'),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
                   _InfoTile(title: 'Email', value: email),
                   const SizedBox(height: 10),
                   _InfoTile(title: 'Structure', value: structureLabel),
@@ -225,6 +313,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           onChanged: (value) {
                             setState(() => _notificationsEnabled = value);
                             _showToggleMessage('Notifications', value);
+                            ref.read(apiServiceProvider).updateMyProfile({
+                              'notificationsEnabled': value,
+                            });
                           },
                         ),
                         _SettingRow(

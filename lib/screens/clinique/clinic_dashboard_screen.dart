@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
 import 'package:sante/widgets/sante_shell.dart';
@@ -17,10 +20,12 @@ class ClinicDashboardScreen extends ConsumerStatefulWidget {
 class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
   int _selectedTabIndex = 0;
   bool _loading = true;
+  String? _loadError;
   List<Map<String, dynamic>> _patients = [];
   List<Map<String, dynamic>> _consultations = [];
   List<Map<String, dynamic>> _appointments = [];
   List<Map<String, dynamic>> _ordonnances = [];
+  List<Map<String, dynamic>> _analyses = [];
   Map<String, dynamic>? _selectedDossier;
   String _searchQuery = '';
   String _patientFilter = 'Tous';
@@ -61,6 +66,8 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
   String _settingsClinicType = 'clinique_privee';
   bool _settingsReady = false;
   bool _savingSettings = false;
+  DateTime? _dossierFrom;
+  DateTime? _dossierTo;
 
   static const List<String> _filterOptions = [
     'Tous',
@@ -155,6 +162,16 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
     }
   }
 
+  void _closeSelectedDossier() {
+    setState(() {
+      _selectedPatientId = null;
+      _selectedDossier = null;
+      _showNewOrdonnance = false;
+      _dossierFrom = null;
+      _dossierTo = null;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -181,11 +198,19 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
   }
 
   Future<void> _loadData() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
     try {
       final api = ref.read(apiServiceProvider);
       final patientResults = await api.getPatients();
       final consultationResults = await api.getClinicConsultations();
       final ordonnanceResults = await api.getClinicOrdonnances();
+      final analyseResults = await api.getClinicAnalyses();
+      final rendezVousResults = await api.getClinicRendezVous();
       final profile = await api.getMyProfile();
 
       final patientRows = patientResults
@@ -239,12 +264,28 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
           'raw': entry,
         };
       }).toList();
+      final rendezVous = rendezVousResults.map((entry) {
+        final patient = entry['patient'] is Map
+            ? Map<String, dynamic>.from(entry['patient'])
+            : <String, dynamic>{};
+        final date = _parseDate(entry['date']);
+        return {
+          'id': (entry['_id'] ?? entry['id'] ?? '').toString(),
+          'patientId': (patient['_id'] ?? '').toString(),
+          'name': _displayNameFromPatient(patient),
+          'reason': entry['motif']?.toString() ?? 'Rendez-vous',
+          'time': date == null ? '—' : _timeLabel(date),
+          'date': date,
+          'status': entry['status']?.toString() ?? 'planned',
+        };
+      }).toList();
 
       setState(() {
         _patients = patientRows;
         _consultations = consultations;
-        _appointments = <Map<String, dynamic>>[];
+        _appointments = rendezVous;
         _ordonnances = ordonnances;
+        _analyses = analyseResults;
         _profile = profile;
         _settingsReady = false;
         _loading = false;
@@ -254,8 +295,51 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       _showActionMessage(
         'Chargement clinique impossible : ${e.toString().replaceFirst('Exception: ', '')}',
       );
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadError = e.toString().replaceFirst('Exception: ', '');
+      });
     }
+  }
+
+  Widget _buildLoadError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 42,
+              color: AppColors.g700,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Espace clinique indisponible',
+              style: GoogleFonts.syne(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _loadError ?? 'Les données n’ont pas pu être chargées.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.g600),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réessayer'),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.g700),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> get _filteredPatients {
@@ -295,43 +379,64 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
         icon: Icons.dashboard_rounded,
         label: 'Accueil',
         selected: _selectedTabIndex == 0,
-        onTap: () => setState(() => _selectedTabIndex = 0),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 0);
+        },
       ),
       SanteDashboardNavItem(
         icon: Icons.people_alt_rounded,
         label: 'Patients',
         selected: _selectedTabIndex == 1,
-        onTap: () => setState(() => _selectedTabIndex = 1),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 1);
+        },
       ),
       SanteDashboardNavItem(
         icon: Icons.medical_services_rounded,
         label: 'Consultations',
         selected: _selectedTabIndex == 2,
-        onTap: () => setState(() => _selectedTabIndex = 2),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 2);
+        },
       ),
       SanteDashboardNavItem(
         icon: Icons.receipt_long_rounded,
         label: 'Ordonnances',
         selected: _selectedTabIndex == 3,
-        onTap: () => setState(() => _selectedTabIndex = 3),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 3);
+        },
       ),
       SanteDashboardNavItem(
         icon: Icons.calendar_month_rounded,
         label: 'Rendez-vous',
         selected: _selectedTabIndex == 4,
-        onTap: () => setState(() => _selectedTabIndex = 4),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 4);
+        },
       ),
       SanteDashboardNavItem(
         icon: Icons.bar_chart_rounded,
         label: 'Rapports',
         selected: _selectedTabIndex == 5,
-        onTap: () => setState(() => _selectedTabIndex = 5),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 5);
+        },
       ),
       SanteDashboardNavItem(
         icon: Icons.settings_rounded,
         label: 'Paramètres',
         selected: _selectedTabIndex == 6,
-        onTap: () => setState(() => _selectedTabIndex = 6),
+        onTap: () {
+          _closeSelectedDossier();
+          setState(() => _selectedTabIndex = 6);
+        },
       ),
     ];
 
@@ -368,7 +473,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _buildBody(),
+          : (_loadError != null ? _buildLoadError() : _buildBody()),
     );
   }
 
@@ -437,6 +542,99 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
         'Ouverture dossier impossible : ${e.toString().replaceFirst('Exception: ', '')}',
       );
     }
+  }
+
+  Future<void> _printSelectedDossier() async {
+    final patient = _selectedPatient;
+    if (patient == null) return;
+    bool inPeriod(dynamic value) {
+      final date = DateTime.tryParse(value?.toString() ?? '');
+      if (date == null) return true;
+      if (_dossierFrom != null && date.isBefore(_dossierFrom!)) return false;
+      if (_dossierTo != null && date.isAfter(_dossierTo!)) return false;
+      return true;
+    }
+
+    final consultations =
+        ((_selectedDossier?['consultations'] as List?) ?? const [])
+            .where((item) => inPeriod(item['date'] ?? item['createdAt']))
+            .toList();
+    final ordonnances =
+        ((_selectedDossier?['ordonnances'] as List?) ?? const [])
+            .where((item) => inPeriod(item['emiseAt'] ?? item['createdAt']))
+            .toList();
+    final analyses = ((_selectedDossier?['analyses'] as List?) ?? const [])
+        .where((item) => inPeriod(item['date'] ?? item['createdAt']))
+        .toList();
+    final document = pw.Document();
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => [
+          pw.Header(level: 0, text: 'SantéTogo - Dossier patient'),
+          pw.Text('Patient : ${patient['fullName'] ?? 'Patient'}'),
+          pw.Text('Dossier : ${patient['dossierNumber'] ?? '—'}'),
+          pw.Text('Téléphone : ${patient['telephone'] ?? '—'}'),
+          pw.Text('Groupe sanguin : ${patient['groupeSanguin'] ?? '—'}'),
+          pw.SizedBox(height: 16),
+          pw.Text(
+            'Consultations',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          ...consultations.map(
+            (item) => pw.Text(
+              '${item['motif'] ?? 'Consultation'} - ${item['diagnostic'] ?? 'Diagnostic non renseigné'}',
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Text(
+            'Ordonnances',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          ...ordonnances.map(
+            (item) => pw.Text(
+              '${item['status'] ?? 'active'} - ${(item['medicaments'] as List? ?? const []).map((med) => med['nom'] ?? 'Médicament').join(', ')}',
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Text(
+            'Analyses',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          ...analyses.map(
+            (item) => pw.Text(item['type']?.toString() ?? 'Analyse'),
+          ),
+        ],
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (_) async => document.save());
+  }
+
+  Future<void> _selectDossierPeriod() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _dossierFrom != null && _dossierTo != null
+          ? DateTimeRange(start: _dossierFrom!, end: _dossierTo!)
+          : null,
+    );
+    if (range == null) return;
+    setState(() {
+      _dossierFrom = DateTime(
+        range.start.year,
+        range.start.month,
+        range.start.day,
+      );
+      _dossierTo = DateTime(
+        range.end.year,
+        range.end.month,
+        range.end.day,
+        23,
+        59,
+        59,
+      );
+    });
   }
 
   void _showActionMessage(String message) {
@@ -850,6 +1048,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
     final groupeController = TextEditingController(text: 'A+');
     final allergiesController = TextEditingController();
     final dateController = TextEditingController();
+    var sexe = 'M';
 
     final result = await showDialog<bool>(
       context: context,
@@ -857,71 +1056,91 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
         title: const Text('Nouveau patient'),
         content: SizedBox(
           width: 420,
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nomController,
-                    decoration: const InputDecoration(labelText: 'Nom'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Nom requis'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: prenomController,
-                    decoration: const InputDecoration(labelText: 'Prénom'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Prénom requis'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: dateController,
-                    decoration: const InputDecoration(
-                      labelText: 'Date de naissance (AAAA-MM-JJ)',
+          child: StatefulBuilder(
+            builder: (context, setDialogState) => Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nomController,
+                      decoration: const InputDecoration(labelText: 'Nom'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Nom requis'
+                          : null,
                     ),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Date requise'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: telephoneController,
-                    decoration: const InputDecoration(labelText: 'Téléphone'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Téléphone requis'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: adresseController,
-                    decoration: const InputDecoration(labelText: 'Adresse'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Adresse requise'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: groupeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Groupe sanguin',
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: prenomController,
+                      decoration: const InputDecoration(labelText: 'Prénom'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Prénom requis'
+                          : null,
                     ),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Groupe requis'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: allergiesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Allergies (facultatif)',
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: dateController,
+                      decoration: const InputDecoration(
+                        labelText: 'Date de naissance (AAAA-MM-JJ)',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Date requise'
+                          : null,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: sexe,
+                      decoration: const InputDecoration(labelText: 'Sexe'),
+                      items: const [
+                        DropdownMenuItem(value: 'M', child: Text('Masculin')),
+                        DropdownMenuItem(value: 'F', child: Text('Féminin')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setDialogState(() => sexe = value);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: telephoneController,
+                      decoration: const InputDecoration(labelText: 'Téléphone'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Téléphone requis'
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: adresseController,
+                      decoration: const InputDecoration(labelText: 'Adresse'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Adresse requise'
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: groupeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Groupe sanguin',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Groupe requis'
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: allergiesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Allergies (facultatif)',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -951,7 +1170,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
         'nom': nomController.text.trim(),
         'prenom': prenomController.text.trim(),
         'dateNaissance': dateController.text.trim(),
-        'sexe': 'F',
+        'sexe': sexe,
         'telephone': telephoneController.text.trim(),
         'adresse': adresseController.text.trim(),
         'groupeSanguin': groupeController.text.trim(),
@@ -1069,6 +1288,18 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _selectDossierPeriod,
+              icon: const Icon(Icons.date_range_rounded),
+              label: Text(
+                _dossierFrom == null
+                    ? 'Toute la période'
+                    : 'Période personnalisée',
+              ),
+            ),
+          ),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -1604,6 +1835,25 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _closeSelectedDossier,
+                icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                label: const Text('Retour aux patients'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _createRendezVousDialog(
+                  initialPatientId: _selectedPatientId,
+                ),
+                icon: const Icon(Icons.event_rounded, size: 16),
+                label: const Text('Nouveau rendez-vous'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
             spacing: 12,
             runSpacing: 12,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -1626,7 +1876,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                   SizedBox(
                     width: compact ? double.infinity : null,
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: _printSelectedDossier,
                       icon: const Icon(Icons.print_rounded, size: 16),
                       label: const Text('Imprimer'),
                       style: OutlinedButton.styleFrom(
@@ -2135,10 +2385,9 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
         : allergiesList.join(' · ');
     final previewMeds = _prescriptionMeds;
     final compact = MediaQuery.sizeOf(context).width < 760;
-    final contentWidth = (MediaQuery.sizeOf(context).width - 40).clamp(
-      320.0,
-      double.infinity,
-    ).toDouble();
+    final contentWidth = (MediaQuery.sizeOf(context).width - 40)
+        .clamp(320.0, double.infinity)
+        .toDouble();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -2314,14 +2563,17 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                           ),
                         )
                       else
-                        ...previewMeds.map(
-                          (med) => Padding(
+                        ...previewMeds.asMap().entries.map(
+                          (entry) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _PrescriptionRow(
-                              name: med['name'] ?? 'Médicament',
-                              posologie: med['dose'] ?? '—',
-                              interval: med['interval'] ?? '—',
-                              duration: med['duration'] ?? '—',
+                              name: entry.value['name'] ?? 'Médicament',
+                              posologie: entry.value['dose'] ?? '—',
+                              interval: entry.value['interval'] ?? '—',
+                              duration: entry.value['duration'] ?? '—',
+                              onRemove: () => setState(
+                                () => _prescriptionMeds.removeAt(entry.key),
+                              ),
                             ),
                           ),
                         ),
@@ -2463,198 +2715,198 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'APERÇU ORDONNANCE NUMÉRIQUE',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.g600,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'APERÇU ORDONNANCE NUMÉRIQUE',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.g600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.g700,
-                        borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.g700,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'SantéTogo',
+                              style: GoogleFonts.syne(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'N° Ordonnance',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.white.withValues(alpha: 0.8),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
+                      const SizedBox(height: 16),
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'SantéTogo',
-                            style: GoogleFonts.syne(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Patient',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.g600,
+                                ),
+                              ),
+                              Text(
+                                fullName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g800,
+                                ),
+                              ),
+                              Text(
+                                '${group == '—' ? 'Groupe non renseigné' : 'Groupe $group'} · ${allergiesList.isEmpty ? 'Aucune allergie' : allergiesList.join(' · ')}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.g600,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            'N° Ordonnance',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                ref
+                                        .watch(authStateProvider)
+                                        .valueOrNull
+                                        ?.fullName ??
+                                    'Médecin connecté',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g800,
+                                ),
+                              ),
+                              Text(
+                                'Professionnel de santé',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.g600,
+                                ),
+                              ),
+                              Text(
+                                _dateLabel(DateTime.now().toIso8601String()),
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.g600,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Patient',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                            Text(
-                              fullName,
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g800,
-                              ),
-                            ),
-                            Text(
-                              '${group == '—' ? 'Groupe non renseigné' : 'Groupe $group'} · ${allergiesList.isEmpty ? 'Aucune allergie' : allergiesList.join(' · ')}',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              ref
-                                      .watch(authStateProvider)
-                                      .valueOrNull
-                                      ?.fullName ??
-                                  'Médecin connecté',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g800,
-                              ),
-                            ),
-                            Text(
-                              'Professionnel de santé',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                            Text(
-                              _dateLabel(DateTime.now().toIso8601String()),
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Médicaments prescrits',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.g700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (previewMeds.isEmpty)
+                      const SizedBox(height: 18),
                       Text(
-                        'Aucun médicament ajouté pour cette ordonnance.',
+                        'Médicaments prescrits',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.g700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (previewMeds.isEmpty)
+                        Text(
+                          'Aucun médicament ajouté pour cette ordonnance.',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.g600,
+                          ),
+                        )
+                      else
+                        ...previewMeds.map(
+                          (med) => _PreviewMedicineLine(
+                            label: med['name'] ?? 'Médicament',
+                            details:
+                                '${med['dose'] ?? '—'} · ${med['duration'] ?? '—'}',
+                          ),
+                        ),
+                      const SizedBox(height: 18),
+                      Text(
+                        _rxInstructionsController.text.trim().isEmpty
+                            ? 'Aucune instruction générale ajoutée.'
+                            : _rxInstructionsController.text.trim(),
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           color: AppColors.g600,
-                        ),
-                      )
-                    else
-                      ...previewMeds.map(
-                        (med) => _PreviewMedicineLine(
-                          label: med['name'] ?? 'Médicament',
-                          details:
-                              '${med['dose'] ?? '—'} · ${med['duration'] ?? '—'}',
+                          height: 1.5,
                         ),
                       ),
-                    const SizedBox(height: 18),
-                    Text(
-                      _rxInstructionsController.text.trim().isEmpty
-                          ? 'Aucune instruction générale ajoutée.'
-                          : _rxInstructionsController.text.trim(),
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: AppColors.g600,
-                        height: 1.5,
+                      const SizedBox(height: 18),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: AppColors.g50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.s100),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.qr_code_2_rounded,
+                                size: 58,
+                                color: AppColors.g700,
+                              ),
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Expire le',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.g600,
+                                ),
+                              ),
+                              Text(
+                                _rxValidity,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _rxRenewal,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppColors.g600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: AppColors.g50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.s100),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.qr_code_2_rounded,
-                              size: 58,
-                              color: AppColors.g700,
-                            ),
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Expire le',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                            Text(
-                              _rxValidity,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g800,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _rxRenewal,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
               ),
             ],
           ),
@@ -2843,9 +3095,118 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
     );
   }
 
+  Future<void> _createRendezVousDialog({String? initialPatientId}) async {
+    if (_patients.isEmpty) {
+      _showActionMessage('Créez d’abord un patient.');
+      return;
+    }
+    String patientId = initialPatientId ?? _patients.first['id'].toString();
+    final motifController = TextEditingController();
+    DateTime appointmentDate = DateTime.now().add(const Duration(hours: 1));
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Nouveau rendez-vous'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: patientId,
+                  decoration: const InputDecoration(labelText: 'Patient'),
+                  items: _patients
+                      .map(
+                        (patient) => DropdownMenuItem<String>(
+                          value: patient['id'].toString(),
+                          child: Text(patient['fullName'].toString()),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => patientId = value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: motifController,
+                  decoration: const InputDecoration(labelText: 'Motif'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                      initialDate: appointmentDate,
+                    );
+                    if (date == null || !context.mounted) return;
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(appointmentDate),
+                    );
+                    if (time == null) return;
+                    setDialogState(() {
+                      appointmentDate = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      );
+                    });
+                  },
+                  icon: const Icon(Icons.event_rounded),
+                  label: Text(_dateLabel(appointmentDate)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Créer'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final motif = motifController.text.trim();
+    motifController.dispose();
+    if (result != true || motif.isEmpty) {
+      if (result == true) _showActionMessage('Le motif est requis.');
+      return;
+    }
+    try {
+      await ref.read(apiServiceProvider).createRendezVous({
+        'patientId': patientId,
+        'date': appointmentDate.toIso8601String(),
+        'motif': motif,
+      });
+      await _loadData();
+      _showActionMessage('Rendez-vous créé.');
+    } catch (error) {
+      _showActionMessage(
+        'Création impossible : ${error.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
+  }
+
   Widget _appointmentsView() {
     if (_appointments.isEmpty) {
-      return const Center(child: Text('Aucun rendez-vous à venir.'));
+      return Center(
+        child: FilledButton.icon(
+          onPressed: _createRendezVousDialog,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Créer un rendez-vous'),
+        ),
+      );
     }
 
     return SingleChildScrollView(
@@ -2853,13 +3214,23 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       child: _PanelCard(
         title: 'Rendez-vous du jour',
         child: Column(
-          children: _appointments.map((item) {
-            return _AppointmentItem(
-              time: item['time'] as String,
-              name: item['name'] as String,
-              reason: item['reason'] as String,
-            );
-          }).toList(),
+          children: [
+            ..._appointments.map(
+              (item) => _AppointmentItem(
+                time: item['time'] as String,
+                name: item['name'] as String,
+                reason: item['reason'] as String,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _createRendezVousDialog,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Nouveau rendez-vous'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2924,6 +3295,11 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                   label: 'Ordonnances émises',
                   value: '${_ordonnances.length}',
                   tone: AppColors.g700,
+                ),
+                _ActivityRow(
+                  label: 'Analyses enregistrées',
+                  value: '${_analyses.length}',
+                  tone: AppColors.blue,
                 ),
                 _ActivityRow(
                   label: 'Rendez-vous planifiés',
@@ -3304,12 +3680,14 @@ class _PrescriptionRow extends StatelessWidget {
   final String posologie;
   final String interval;
   final String duration;
+  final VoidCallback onRemove;
 
   const _PrescriptionRow({
     required this.name,
     required this.posologie,
     required this.interval,
     required this.duration,
+    required this.onRemove,
   });
 
   @override
@@ -3364,7 +3742,7 @@ class _PrescriptionRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: onRemove,
             icon: const Icon(Icons.close_rounded, color: AppColors.danger),
           ),
         ],

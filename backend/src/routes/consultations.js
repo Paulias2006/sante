@@ -2,6 +2,7 @@ const express = require('express');
 const Consultation = require('../models/Consultation');
 const Ordonnance = require('../models/Ordonnance');
 const Patient = require('../models/Patient');
+const User = require('../models/User');
 const { authorize } = require('../middleware/auth');
 const { fail } = require('../utils/apiResponse');
 const { logAction } = require('../utils/logger');
@@ -11,7 +12,6 @@ const router = express.Router();
 router.get('/', authorize('medecin', 'secretaire'), async (req, res) => {
   try {
     const filters = {};
-    if (req.user.entite) filters.clinique = req.user.entite;
 
     const consultations = await Consultation.find(filters)
       .populate('patient', 'nom prenom dossierNumber groupeSanguin allergies telephone')
@@ -62,6 +62,13 @@ router.post('/', authorize('medecin'), async (req, res) => {
 
 router.get('/patient/:patientId', authorize('medecin', 'secretaire', 'patient'), async (req, res) => {
   try {
+    if (
+      req.user.role === 'patient' &&
+      (!req.user.patientId || req.user.patientId.toString() !== req.params.patientId)
+    ) {
+      return fail(res, 'Accès non autorisé', 403);
+    }
+
     const consultations = await Consultation.find({ patient: req.params.patientId }).sort({ date: -1 });
     res.json(consultations);
   } catch (error) {
@@ -71,7 +78,10 @@ router.get('/patient/:patientId', authorize('medecin', 'secretaire', 'patient'),
 
 router.get('/:id', authorize('medecin', 'secretaire'), async (req, res) => {
   try {
-    const consultation = await Consultation.findById(req.params.id);
+    const consultation = await Consultation.findOne({
+      _id: req.params.id,
+      clinique: req.user.entite,
+    });
     if (!consultation) return fail(res, 'Consultation introuvable', 404);
     res.json(consultation);
   } catch (error) {

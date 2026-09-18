@@ -17,6 +17,16 @@ router.get('/scan/:qrToken', async (req, res) => {
 
     if (!ordonnance) return fail(res, 'ORDONNANCE INVALIDE', 400);
     if (ordonnance.status === 'delivered') return fail(res, 'DÉJÀ UTILISÉE', 409);
+    if (ordonnance.expireAt && ordonnance.expireAt <= new Date()) {
+      return fail(res, 'ORDONNANCE EXPIRÉE', 409);
+    }
+    if (
+      ordonnance.patient.qrRevokedAt &&
+      payload.iat &&
+      payload.iat * 1000 <= ordonnance.patient.qrRevokedAt.getTime()
+    ) {
+      return fail(res, 'QR patient révoqué', 401);
+    }
 
     const patient = ordonnance.patient;
     res.json({
@@ -40,13 +50,41 @@ router.get('/scan/:qrToken', async (req, res) => {
 
 router.get('/delivrances', async (req, res) => {
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const livraisons = await Delivrance.find({ pharmacie: req.user.entite, date: { $gte: todayStart } }).populate('patient').sort({ date: -1 });
+    const from = req.query.from ? new Date(req.query.from) : null;
+    const to = req.query.to ? new Date(req.query.to) : null;
+    const date = {};
+    if (from && !Number.isNaN(from.getTime())) date.$gte = from;
+    if (to && !Number.isNaN(to.getTime())) date.$lte = to;
+    if (!from && !to) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      date.$gte = todayStart;
+    }
+    const livraisons = await Delivrance.find({ pharmacie: req.user.entite, date })
+      .populate('patient')
+      .sort({ date: -1 });
     res.json(livraisons);
   } catch (error) {
     res.status(500).json({ message: 'Erreur récupération délivrances', error: error.message });
+  }
+});
+
+router.patch('/delivrances/:id/return', async (req, res) => {
+  try {
+    const delivery = await Delivrance.findOne({
+      _id: req.params.id,
+      pharmacie: req.user.entite,
+      status: { $in: ['delivered', 'partial'] },
+    });
+    if (!delivery) return fail(res, 'Délivrance introuvable ou déjà retournée', 404);
+    delivery.status = 'returned';
+    delivery.returnedAt = new Date();
+    delivery.returnReason = (req.body?.reason || 'Retour enregistré').toString().trim();
+    await delivery.save();
+    await Ordonnance.findByIdAndUpdate(delivery.ordonnance, { status: 'active' });
+    res.json({ message: 'Retour enregistré', delivrance: delivery });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur retour délivrance', error: error.message });
   }
 });
 

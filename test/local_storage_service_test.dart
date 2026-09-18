@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:sante/services/local_storage_service.dart';
@@ -5,7 +7,8 @@ import 'package:sante/services/local_storage_service.dart';
 void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    await Hive.initFlutter();
+    final testDirectory = await Directory.systemTemp.createTemp('sante_hive_');
+    Hive.init(testDirectory.path);
     await Hive.deleteBoxFromDisk('user_data');
     await Hive.openBox('user_data');
   });

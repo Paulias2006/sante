@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
 import 'package:sante/widgets/sante_shell.dart';
@@ -24,6 +27,8 @@ class _PharmacyDashboardScreenState
   Map<String, dynamic> _scanResult = {};
   bool _scanning = false;
   bool _delivering = false;
+  DateTime? _historyFrom;
+  DateTime? _historyTo;
   final Map<int, bool> _medicineStock = {};
 
   @override
@@ -42,7 +47,7 @@ class _PharmacyDashboardScreenState
     try {
       final api = ref.read(apiServiceProvider);
       final results = await Future.wait([
-        api.getPharmacyDeliveries(),
+        api.getPharmacyDeliveries(from: _historyFrom, to: _historyTo),
         api.getPharmacyStats(),
       ]);
       setState(() {
@@ -89,6 +94,56 @@ class _PharmacyDashboardScreenState
         setState(() => _scanning = false);
       }
     }
+  }
+
+  Future<void> _selectHistoryRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _historyFrom != null && _historyTo != null
+          ? DateTimeRange(start: _historyFrom!, end: _historyTo!)
+          : null,
+    );
+    if (range == null) return;
+    setState(() {
+      _historyFrom = DateTime(
+        range.start.year,
+        range.start.month,
+        range.start.day,
+      );
+      _historyTo = DateTime(
+        range.end.year,
+        range.end.month,
+        range.end.day,
+        23,
+        59,
+        59,
+      );
+    });
+    await _loadData();
+  }
+
+  Future<void> _exportDeliveries() async {
+    final document = pw.Document();
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (_) => [
+          pw.Header(level: 0, text: 'SantéTogo - Rapport pharmacie'),
+          pw.Text(
+            'Période : ${_historyFrom ?? 'début'} → ${_historyTo ?? 'aujourd’hui'}',
+          ),
+          pw.SizedBox(height: 12),
+          ..._deliveries.map(
+            (item) => pw.Text(
+              '${item['date'] ?? ''} - ${item['patient']?['prenom'] ?? ''} ${item['patient']?['nom'] ?? ''} - ${item['status'] ?? ''}',
+            ),
+          ),
+        ],
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (_) async => document.save());
   }
 
   Future<void> _confirmDelivery() async {
@@ -831,7 +886,13 @@ class _PharmacyDashboardScreenState
 
   Widget _deliveriesView() {
     if (_deliveries.isEmpty) {
-      return const Center(child: Text('Aucune délivrance enregistrée.'));
+      return Center(
+        child: OutlinedButton.icon(
+          onPressed: _selectHistoryRange,
+          icon: const Icon(Icons.date_range_rounded),
+          label: const Text('Choisir une autre période'),
+        ),
+      );
     }
 
     return SingleChildScrollView(
@@ -846,6 +907,27 @@ class _PharmacyDashboardScreenState
               fontWeight: FontWeight.w700,
               color: AppColors.s800,
             ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _selectHistoryRange,
+                icon: const Icon(Icons.date_range_rounded),
+                label: Text(
+                  _historyFrom == null
+                      ? 'Choisir la période'
+                      : 'Modifier la période',
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: _exportDeliveries,
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('Télécharger le rapport'),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Container(

@@ -9,11 +9,14 @@ import 'screens/clinique/clinic_dashboard_screen.dart';
 import 'screens/patient/patient_home_screen.dart';
 import 'screens/pharmacie/pharmacy_dashboard_screen.dart';
 import 'services/local_storage_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await LocalStorageService.init();
+  // Notification setup is optional and must not block the first screen.
+  NotificationService.instance.init();
 
   runApp(ProviderScope(child: const SanteTogoApp()));
 }

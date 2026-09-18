@@ -4,12 +4,14 @@ class LocalStorageService {
   static const String _patientQrBox = 'patient_qr';
   static const String _userDataBox = 'user_data';
   static const String _syncBox = 'sync_data';
+  static const String _dossierBox = 'patient_dossier';
 
   static Future<void> init() async {
     await Hive.initFlutter();
     await Hive.openBox(_patientQrBox);
     await Hive.openBox(_userDataBox);
     await Hive.openBox(_syncBox);
+    await Hive.openBox(_dossierBox);
   }
 
   // Patient QR Code (accessible offline)
@@ -67,5 +69,19 @@ class LocalStorageService {
     await Hive.box(_patientQrBox).clear();
     await Hive.box(_userDataBox).clear();
     await Hive.box(_syncBox).clear();
+    await Hive.box(_dossierBox).clear();
+  }
+
+  static Future<void> savePatientDossier(
+    String patientId,
+    Map<String, dynamic> dossier,
+  ) async {
+    await Hive.box(_dossierBox).put(patientId, dossier);
+    await updateLastSync('patient_$patientId', DateTime.now());
+  }
+
+  static Map<String, dynamic>? getPatientDossier(String patientId) {
+    final value = Hive.box(_dossierBox).get(patientId);
+    return value is Map ? Map<String, dynamic>.from(value) : null;
   }
 }

@@ -35,6 +35,9 @@ const userSchema = new mongoose.Schema(
     },
     nom: { type: String, required: true },
     prenom: { type: String, required: true },
+    telephone: { type: String, default: '' },
+    adresse: { type: String, default: '' },
+    notificationsEnabled: { type: Boolean, default: true },
     actif: {
       type: Boolean,
       default: true,

@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class AppConstants {
   // Sidebar width
   static const double sidebarWidth = 260;
@@ -26,15 +24,16 @@ class AppConstants {
   static const String shadowMedium = '0 4px 16px rgba(7,42,31,.11)';
 
   // API
+  static const String defaultApiHost = String.fromEnvironment(
+    'SANTE_DEFAULT_API_HOST',
+    defaultValue: 'https://sante-backend.onrender.com',
+  );
+
   static String get apiHost {
     const configuredHost = String.fromEnvironment('SANTE_API_HOST');
     if (configuredHost.isNotEmpty) return configuredHost;
 
-    if (kIsWeb) return 'http://localhost:3000';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://127.0.0.1:3000';
-    }
-    return 'http://localhost:3000';
+    return defaultApiHost;
   }
 
   static String get baseUrl => '$apiHost/api';

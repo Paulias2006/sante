@@ -34,10 +34,12 @@ const delivranceSchema = new mongoose.Schema(
     medicamentsDelivres: [medicamentDelivreSchema],
     status: {
       type: String,
-      enum: ['delivered', 'partial'],
+      enum: ['delivered', 'partial', 'returned'],
       default: 'delivered',
     },
     date: { type: Date, default: Date.now },
+    returnedAt: { type: Date, default: null },
+    returnReason: { type: String, default: '' },
   },
   { timestamps: true }
 );

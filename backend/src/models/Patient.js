@@ -35,7 +35,16 @@ const patientSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    clinique: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Clinique',
+      required: true,
+    },
     createdAt: { type: Date, default: Date.now },
+    qrRevokedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

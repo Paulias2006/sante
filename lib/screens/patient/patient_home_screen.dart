@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
 import 'package:sante/widgets/qr_widgets.dart';
 import 'package:sante/widgets/sante_shell.dart';
+import 'package:sante/services/notification_service.dart';
+import 'package:sante/services/local_storage_service.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -19,13 +23,96 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   int _selectedTabIndex = 0;
   int _dossierTabIndex = 2;
   bool _loading = true;
+  bool _missingPatientLink = false;
+  String? _loadError;
   Map<String, dynamic> _patient = {};
   List<dynamic> _ordonnances = [];
   List<dynamic> _consultations = [];
   List<dynamic> _analyses = [];
   List<dynamic> _delivrances = [];
+  DateTime? _historyFrom;
+  DateTime? _historyTo;
 
-  Future<void> _copyPatientPrintSummary() async {
+  bool _inSelectedPeriod(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '');
+    if (date == null) return true;
+    if (_historyFrom != null && date.isBefore(_historyFrom!)) return false;
+    if (_historyTo != null && date.isAfter(_historyTo!)) return false;
+    return true;
+  }
+
+  List<dynamic> get _filteredConsultations => _consultations
+      .where((item) => _inSelectedPeriod(item['date'] ?? item['createdAt']))
+      .toList();
+
+  List<dynamic> get _filteredOrdonnances => _ordonnances
+      .where((item) => _inSelectedPeriod(item['emiseAt'] ?? item['createdAt']))
+      .toList();
+
+  List<dynamic> get _filteredAnalyses => _analyses
+      .where((item) => _inSelectedPeriod(item['date'] ?? item['createdAt']))
+      .toList();
+
+  List<dynamic> get _filteredDelivrances => _delivrances
+      .where((item) => _inSelectedPeriod(item['date'] ?? item['createdAt']))
+      .toList();
+
+  Future<void> _selectHistoryRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _historyFrom != null && _historyTo != null
+          ? DateTimeRange(start: _historyFrom!, end: _historyTo!)
+          : null,
+    );
+    if (range == null) return;
+    setState(() {
+      _historyFrom = DateTime(
+        range.start.year,
+        range.start.month,
+        range.start.day,
+      );
+      _historyTo = DateTime(
+        range.end.year,
+        range.end.month,
+        range.end.day,
+        23,
+        59,
+        59,
+      );
+    });
+  }
+
+  Widget _historyPeriodControls() {
+    final label = _historyFrom == null
+        ? 'Toute la période'
+        : '${_formattedDate(_historyFrom)} → ${_formattedDate(_historyTo)}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _selectHistoryRange,
+            icon: const Icon(Icons.date_range_rounded),
+            label: Text(label),
+          ),
+          if (_historyFrom != null)
+            TextButton(
+              onPressed: () => setState(() {
+                _historyFrom = null;
+                _historyTo = null;
+              }),
+              child: const Text('Réinitialiser'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _printPatientDossier() async {
     final patientName = _userName.trim().isNotEmpty
         ? _userName
         : '${_patient['prenom'] ?? ''} ${_patient['nom'] ?? ''}'.trim();
@@ -41,49 +128,109 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       'Téléphone: ${_patient['telephone'] ?? '—'}',
       'Groupe sanguin: ${_patient['groupeSanguin'] ?? '—'}',
       'Allergies: ${allergies.isEmpty ? 'Aucune allergie connue' : allergies}',
-      'Ordonnances: ${_ordonnances.length}',
-      'Consultations: ${_consultations.length}',
-      'Analyses: ${_analyses.length}',
+      'Ordonnances: ${_filteredOrdonnances.length}',
+      'Consultations: ${_filteredConsultations.length}',
+      'Analyses: ${_filteredAnalyses.length}',
     ].join('\n');
 
-    await Clipboard.setData(ClipboardData(text: summary));
+    final document = pw.Document();
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => [
+          pw.Header(level: 0, text: 'SantéTogo - Dossier patient'),
+          pw.Text(summary),
+          pw.SizedBox(height: 16),
+          pw.Text(
+            'Consultations',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          ..._filteredConsultations.map(
+            (item) => pw.Text(
+              '${_formattedDate(item['date'] ?? item['createdAt'])} - ${item['motif'] ?? 'Consultation'} - ${item['diagnostic'] ?? 'Diagnostic non renseigné'}',
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Text(
+            'Ordonnances',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          ..._filteredOrdonnances.map(
+            (item) => pw.Text(
+              '${_formattedDate(item['emiseAt'] ?? item['createdAt'])} - ${item['status'] ?? 'active'} - ${(item['medicaments'] as List? ?? const []).map((med) => med['nom'] ?? 'Médicament').join(', ')}',
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Text(
+            'Analyses',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          ..._filteredAnalyses.map(
+            (item) => pw.Text(
+              '${item['type'] ?? 'Analyse'} - ${_formattedDate(item['date'] ?? item['createdAt'])}',
+            ),
+          ),
+        ],
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (_) async => document.save());
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Dossier prêt : résumé copié pour impression.'),
+        content: Text('Dossier envoyé vers l’impression ou le partage PDF.'),
         backgroundColor: AppColors.g700,
       ),
     );
   }
 
   void _showDossierDetail(String title, String value) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      showDragHandle: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: GoogleFonts.syne(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.s800,
-              ),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(18),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 620),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: GoogleFonts.syne(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.s800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: 'Fermer',
+                    ),
+                  ],
+                ),
+                const Divider(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      value,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        height: 1.55,
+                        color: AppColors.g700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                height: 1.45,
-                color: AppColors.g700,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -96,17 +243,37 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Future<void> _loadPatientData() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _missingPatientLink = false;
+        _loadError = null;
+      });
+    }
+
     final currentUser = ref.read(authStateProvider).valueOrNull;
     final patientId = currentUser?.patientId;
 
     if (patientId == null || patientId.isEmpty) {
-      setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _missingPatientLink = true;
+      });
       return;
     }
 
     try {
       final api = ref.read(apiServiceProvider);
-      final dossier = await api.getPatientDossier(patientId);
+      Map<String, dynamic> dossier;
+      try {
+        dossier = await api.getPatientDossier(patientId);
+        await LocalStorageService.savePatientDossier(patientId, dossier);
+      } catch (_) {
+        final cached = LocalStorageService.getPatientDossier(patientId);
+        if (cached == null) rethrow;
+        dossier = cached;
+      }
       final patient = Map<String, dynamic>.from(dossier['patient'] ?? {});
       final ordonnances = List<dynamic>.from(dossier['ordonnances'] ?? []);
       final consultations = List<dynamic>.from(dossier['consultations'] ?? []);
@@ -121,9 +288,72 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         _delivrances = delivrances;
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+      try {
+        await NotificationService.instance.syncMedicationReminders(
+          _activePrescriptionMedicines(),
+        );
+      } catch (_) {
+        // Notifications are optional and cannot invalidate a loaded dossier.
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError = error.toString().replaceFirst('Exception: ', '');
+      });
     }
+  }
+
+  Widget _buildLoadState() {
+    final title = _missingPatientLink
+        ? 'Compte patient non relié'
+        : 'Dossier indisponible';
+    final message = _missingPatientLink
+        ? 'Ce compte patient ne possède pas encore de patientId associé.'
+        : (_loadError ?? 'Le dossier n’a pas pu être chargé.');
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _missingPatientLink
+                  ? Icons.link_off_rounded
+                  : Icons.cloud_off_rounded,
+              size: 42,
+              color: AppColors.g700,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.syne(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.s800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.g600),
+            ),
+            if (!_missingPatientLink) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _loadPatientData,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Réessayer'),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.g700),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   String get _userName {
@@ -174,13 +404,20 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     final medicines = <Map<String, dynamic>>[];
     for (final ordonnance in _ordonnances) {
       if (ordonnance is! Map) continue;
-      final status = (ordonnance['status'] ?? 'active').toString();
-      if (status != 'active' && status != 'partial') continue;
+      if (!_isOrdonnanceActive(ordonnance)) continue;
       for (final med in (ordonnance['medicaments'] as List? ?? const [])) {
         if (med is Map) medicines.add(Map<String, dynamic>.from(med));
       }
     }
     return medicines;
+  }
+
+  bool _isOrdonnanceActive(dynamic value) {
+    if (value is! Map) return false;
+    final status = (value['status'] ?? 'active').toString().toLowerCase();
+    if (status != 'active' && status != 'partial') return false;
+    final expireAt = DateTime.tryParse(value['expireAt']?.toString() ?? '');
+    return expireAt == null || expireAt.isAfter(DateTime.now());
   }
 
   List<String> _medicamentsFromOrdonnance(Map<String, dynamic> ordonnance) {
@@ -212,6 +449,16 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       default:
         return 'Normal';
     }
+  }
+
+  String _relatedName(dynamic value, {String fallback = 'Non renseigné'}) {
+    if (value is Map) {
+      final name = value['nom']?.toString().trim() ?? '';
+      final firstName = value['prenom']?.toString().trim() ?? '';
+      final combined = '$firstName $name'.trim();
+      if (combined.isNotEmpty) return combined;
+    }
+    return fallback;
   }
 
   String _pharmacyName(dynamic value) {
@@ -284,7 +531,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         icon: Icons.notifications_active_rounded,
         label: 'Rappels',
         selected: _selectedTabIndex == 6,
-        onTap: () => setState(() => _selectedTabIndex = 6),
+        onTap: () async {
+          await NotificationService.instance.requestPermission();
+          if (mounted) setState(() => _selectedTabIndex = 6);
+        },
       ),
     ];
 
@@ -296,29 +546,46 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       userRole: currentUser?.role.toLowerCase() == 'patient'
           ? 'Patient'
           : 'Accès patient',
-      headerAction: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.g50,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.qr_code_rounded, size: 14, color: AppColors.g700),
-            const SizedBox(width: 6),
-            Text(
-              'Dossier actif',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.g700,
-              ),
+      headerAction: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.g50,
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
-        ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.qr_code_rounded,
+                  size: 14,
+                  color: AppColors.g700,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Dossier actif',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.g700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _loadPatientData,
+            tooltip: 'Actualiser le dossier',
+            icon: const Icon(Icons.refresh_rounded),
+            color: AppColors.g700,
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : (_missingPatientLink || _loadError != null)
+          ? _buildLoadState()
           : _buildContent(userName),
     );
   }
@@ -351,9 +618,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     final allergies = ((_patient['allergies'] as List?) ?? [])
         .map((e) => e.toString())
         .join(' · ');
-    final activeOrdonnances = _ordonnances
-        .where((entry) => (entry['status'] ?? 'active') == 'active')
-        .toList();
+    final activeOrdonnances = _ordonnances.where(_isOrdonnanceActive).toList();
 
     if (_patient.isEmpty) {
       return _emptyState(
@@ -580,6 +845,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _historyPeriodControls(),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -603,7 +869,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   SizedBox(
                     width: compact ? double.infinity : null,
                     child: OutlinedButton.icon(
-                      onPressed: _copyPatientPrintSummary,
+                      onPressed: _printPatientDossier,
                       icon: const Icon(Icons.print_rounded, size: 16),
                       label: const Text('Imprimer'),
                       style: OutlinedButton.styleFrom(
@@ -917,7 +1183,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                             }),
                           ),
                         ),
-                            ),
+                ),
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
@@ -1034,7 +1300,17 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             for (final item in _consultations)
               row(
                 _formattedDate(item['date'] ?? item['createdAt']),
-                '${item['motif'] ?? 'Consultation'} · ${item['diagnostic'] ?? 'Diagnostic non renseigné'}',
+                [
+                  item['motif'] ?? 'Consultation',
+                  'Médecin : ${_relatedName(item['medecin'])}',
+                  'Établissement : ${_relatedName(item['clinique'])}',
+                  'Diagnostic : ${item['diagnostic'] ?? 'Non renseigné'}',
+                  if ((item['notes'] ?? '').toString().trim().isNotEmpty)
+                    'Notes : ${item['notes']}',
+                  if (item['constantes'] is Map &&
+                      (item['constantes'] as Map).isNotEmpty)
+                    'Constantes : ${(item['constantes'] as Map).entries.map((entry) => '${entry.key}: ${entry.value}').join(', ')}',
+                ].join(' · '),
                 icon: Icons.medical_services_rounded,
               ),
           ],
@@ -1097,7 +1373,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     : (item['resultats'] as List)
                           .map(
                             (result) =>
-                                '${result['parametre'] ?? 'Paramètre'}: ${result['valeur'] ?? '—'} ${result['unite'] ?? ''}'
+                                '${result['parametre'] ?? 'Paramètre'}: ${result['valeur'] ?? '—'} ${result['unite'] ?? ''} · statut: ${_analysisStatusLabel(result['statut']?.toString())}'
                                     .trim(),
                           )
                           .join(' · '),
@@ -1111,7 +1387,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Widget _buildOrdonnances() {
-    if (_ordonnances.isEmpty) {
+    if (_filteredOrdonnances.isEmpty) {
       return _emptyState('Aucune ordonnance disponible pour ce dossier.');
     }
 
@@ -1120,6 +1396,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _historyPeriodControls(),
           Text(
             'Ordonnances',
             style: GoogleFonts.syne(
@@ -1129,14 +1406,16 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          for (final item in _ordonnances)
+          for (final item in _filteredOrdonnances)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: _PrescriptionCard(
-                doctor: 'Médecin',
-                date: _formattedDate(item['emiseAt']),
-                title: 'Ordonnance ${item['status'] ?? 'active'}',
-                meds: _medicamentsFromOrdonnance(item),
+              child: _PrescriptionDetailsCard(
+                ordonnance: item,
+                formattedDate: _formattedDate,
+                medicaments: (item['medicaments'] as List? ?? const [])
+                    .whereType<Map>()
+                    .map((medicine) => Map<String, dynamic>.from(medicine))
+                    .toList(),
               ),
             ),
         ],
@@ -1145,14 +1424,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Widget _buildAnalyses() {
-    if (_analyses.isEmpty) {
+    if (_filteredAnalyses.isEmpty) {
       return _emptyState(
         'Aucune analyse ou résultat de consultation disponible.',
       );
     }
 
     final items = <_AnalysisItem>[];
-    for (final item in _analyses) {
+    for (final item in _filteredAnalyses) {
       final resultats = item['resultats'] as List? ?? const [];
       if (resultats.isEmpty) {
         items.add(
@@ -1168,7 +1447,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           items.add(
             _AnalysisItem(
               label:
-                  '${item['type'] ?? 'Analyse'} · ${result['parametre'] ?? 'Paramètre'}',
+                  '${item['type'] ?? 'Analyse'} · ${result['parametre'] ?? 'Paramètre'} · ${_relatedName(item['clinique'])}',
               value: '${result['valeur'] ?? '—'} ${result['unite'] ?? ''}'
                   .trim(),
               status: _analysisStatusLabel(result['statut']?.toString()),
@@ -1183,6 +1462,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _historyPeriodControls(),
           Text(
             'Analyses',
             style: GoogleFonts.syne(
@@ -1307,6 +1587,26 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     height: 1.5,
                   ),
                 ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _revokePatientQr,
+                      icon: const Icon(Icons.block_rounded, size: 16),
+                      label: const Text('Révoquer'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _rotatePatientQr,
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Nouveau QR'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.g700,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1315,8 +1615,68 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
+  Future<void> _revokePatientQr() async {
+    final patientId = ref.read(authStateProvider).valueOrNull?.patientId;
+    if (patientId == null || patientId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Révoquer le QR ?'),
+        content: const Text(
+          'Le QR actuel ne pourra plus être utilisé par un professionnel.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Révoquer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(apiServiceProvider).revokePatientQr(patientId);
+      await _loadPatientData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('QR révoqué.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _rotatePatientQr() async {
+    final patientId = ref.read(authStateProvider).valueOrNull?.patientId;
+    if (patientId == null || patientId.isEmpty) return;
+    try {
+      await ref.read(apiServiceProvider).rotatePatientQr(patientId);
+      await _loadPatientData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Nouveau QR généré.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
   Widget _buildPharmacyHistory() {
-    if (_delivrances.isEmpty) {
+    if (_filteredDelivrances.isEmpty) {
       return _emptyState('Aucun passage en pharmacie enregistré.');
     }
 
@@ -1325,6 +1685,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _historyPeriodControls(),
           Text(
             'Passages en pharmacie',
             style: GoogleFonts.syne(
@@ -1334,7 +1695,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          for (final item in _delivrances)
+          for (final item in _filteredDelivrances)
             Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(18),
@@ -1407,7 +1768,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${med['nom'] ?? 'Médicament'}${med['delivre'] == false ? ' · rupture signalée' : ''}',
+                              '${med['nom'] ?? 'Médicament'}${med['delivre'] == false ? ' · ${med['raisonNonDelivrance'] ?? 'non délivré'}' : ''}',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: AppColors.s700,
@@ -1426,9 +1787,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Widget _buildReminders() {
-    final activeOrdonnances = _ordonnances
-        .where((entry) => (entry['status'] ?? 'active') == 'active')
-        .toList();
+    final activeOrdonnances = _ordonnances.where(_isOrdonnanceActive).toList();
     if (activeOrdonnances.isEmpty) {
       return _emptyState(
         'Aucun rappel actif. Les rappels se créent depuis les ordonnances actives.',
@@ -1849,21 +2208,40 @@ class _MedicineRow extends StatelessWidget {
   }
 }
 
-class _PrescriptionCard extends StatelessWidget {
-  final String doctor;
-  final String date;
-  final String title;
-  final List<String> meds;
+class _PrescriptionDetailsCard extends StatelessWidget {
+  final Map<String, dynamic> ordonnance;
+  final String Function(dynamic) formattedDate;
+  final List<Map<String, dynamic>> medicaments;
 
-  const _PrescriptionCard({
-    required this.doctor,
-    required this.date,
-    required this.title,
-    required this.meds,
+  const _PrescriptionDetailsCard({
+    required this.ordonnance,
+    required this.formattedDate,
+    required this.medicaments,
   });
+
+  String _value(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? 'Non renseigné' : text;
+  }
+
+  String _nestedName(dynamic value, {String fallback = 'Non renseigné'}) {
+    if (value is Map && value['nom'] != null) {
+      final name = value['nom'].toString().trim();
+      if (name.isNotEmpty) return name;
+    }
+    return fallback;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final status = _value(ordonnance['status']);
+    final expireAt = ordonnance['expireAt'];
+    final expireDate = expireAt == null
+        ? 'Non renseignée'
+        : formattedDate(expireAt);
+    final doctor = _nestedName(ordonnance['medecin']);
+    final clinic = _nestedName(ordonnance['clinique']);
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1875,63 +2253,78 @@ class _PrescriptionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.syne(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.s800,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.successBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
+              Expanded(
                 child: Text(
-                  'Active',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.success,
+                  'Ordonnance du ${formattedDate(ordonnance['emiseAt'])}',
+                  style: GoogleFonts.syne(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.s800,
                   ),
                 ),
+              ),
+              _StatusPill(
+                label: status,
+                tone: status == 'active'
+                    ? AppColors.success
+                    : AppColors.warning,
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '$doctor · $date',
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500),
-          ),
           const SizedBox(height: 12),
-          ...meds.map(
-            (m) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    size: 12,
-                    color: AppColors.g600,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      m,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.s700,
-                      ),
-                    ),
-                  ),
-                ],
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _MiniField(value: 'Médecin : $doctor'),
+              _MiniField(value: 'Clinique : $clinic'),
+              _MiniField(value: 'Expire : $expireDate'),
+              _MiniField(
+                value:
+                    'Validité : ${_value(ordonnance['validiteJours'])} jour(s)',
               ),
+              _MiniField(
+                value: ordonnance['renouvelable'] == true
+                    ? 'Renouvelable'
+                    : 'Non renouvelable',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Médicaments prescrits',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: AppColors.g700,
             ),
           ),
+          const SizedBox(height: 8),
+          if (medicaments.isEmpty)
+            Text(
+              'Aucun médicament renseigné.',
+              style: GoogleFonts.inter(fontSize: 12, color: AppColors.s500),
+            )
+          else
+            for (final medicine in medicaments)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _PrescriptionRow(
+                  name: _value(medicine['nom']),
+                  posologie: _value(medicine['dose']),
+                  interval: _value(medicine['frequence']),
+                  duration: _value(medicine['duree']),
+                ),
+              ),
+          if (_value(ordonnance['instructionsGenerales']) !=
+              'Non renseigné') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Instructions : ${_value(ordonnance['instructionsGenerales'])}',
+              style: GoogleFonts.inter(fontSize: 12, color: AppColors.g600),
+            ),
+          ],
         ],
       ),
     );

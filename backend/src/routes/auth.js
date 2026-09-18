@@ -133,10 +133,31 @@ router.patch('/me', async (req, res) => {
       return fail(res, 'Utilisateur introuvable', 404);
     }
 
-    const { nom, prenom, entite: entitePayload = {} } = req.body || {};
+    const {
+      nom,
+      prenom,
+      telephone,
+      adresse,
+      notificationsEnabled,
+      entite: entitePayload = {},
+    } = req.body || {};
     if (typeof nom === 'string' && nom.trim()) user.nom = nom.trim();
     if (typeof prenom === 'string' && prenom.trim()) user.prenom = prenom.trim();
+    if (typeof telephone === 'string') user.telephone = telephone.trim();
+    if (typeof adresse === 'string') user.adresse = adresse.trim();
+    if (typeof notificationsEnabled === 'boolean') {
+      user.notificationsEnabled = notificationsEnabled;
+    }
     await user.save();
+
+    if (user.role === 'patient') {
+      const refreshedPatientUser = await User.findById(user._id).select('-passwordHash');
+      return res.json({
+        message: 'Profil patient mis à jour',
+        user: refreshedPatientUser,
+        entite: await Clinique.findById(user.entite),
+      });
+    }
 
     const model = user.entiteType === 'pharmacie' ? Pharmacie : Clinique;
     const entite = await model.findById(user.entite);
