@@ -26,7 +26,7 @@ class AppConstants {
   // API
   static const String defaultApiHost = String.fromEnvironment(
     'SANTE_DEFAULT_API_HOST',
-    defaultValue: 'https://sante-backend.onrender.com',
+    defaultValue: 'https://sante-vq36.onrender.com',
   );
 
   static String get apiHost {
