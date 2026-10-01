@@ -830,69 +830,123 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
 
     final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ajouter un médicament'),
-        content: SizedBox(
-          width: 420,
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Médicament'),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Médicament requis'
-                      : null,
+      useRootNavigator: true,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 520,
+              maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.82,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Ajouter un médicament',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: 'Fermer',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: nameController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Médicament',
+                        hintText: 'Ex. Paracétamol 500 mg',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Médicament requis'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: doseController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Dose',
+                        hintText: 'Ex. 1 comprimé',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Dose requise'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: frequencyController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Fréquence',
+                        hintText: 'Ex. 3 fois par jour',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Fréquence requise'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: durationController,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Durée',
+                        hintText: 'Ex. 5 jours',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Durée requise'
+                          : null,
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Annuler'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () {
+                            if (formKey.currentState?.validate() ?? false) {
+                              Navigator.of(dialogContext).pop({
+                                'name': nameController.text.trim(),
+                                'dose': doseController.text.trim(),
+                                'interval': frequencyController.text.trim(),
+                                'duration': durationController.text.trim(),
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.add_rounded, size: 17),
+                          label: const Text('Ajouter'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: doseController,
-                  decoration: const InputDecoration(labelText: 'Dose'),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Dose requise'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: frequencyController,
-                  decoration: const InputDecoration(labelText: 'Fréquence'),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Fréquence requise'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: durationController,
-                  decoration: const InputDecoration(labelText: 'Durée'),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Durée requise'
-                      : null,
-                ),
-              ],
+              ),
             ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() ?? false) {
-                Navigator.of(context).pop({
-                  'name': nameController.text.trim(),
-                  'dose': doseController.text.trim(),
-                  'interval': frequencyController.text.trim(),
-                  'duration': durationController.text.trim(),
-                });
-              }
-            },
-            child: const Text('Ajouter'),
-          ),
-        ],
       ),
     );
 
@@ -2644,6 +2698,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                                 const SizedBox(height: 6),
                                 DropdownButtonFormField<String>(
                                   initialValue: _rxValidity,
+                                  isExpanded: true,
                                   decoration: InputDecoration(
                                     filled: true,
                                     fillColor: AppColors.g50,
@@ -2657,7 +2712,10 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                                           .map(
                                             (value) => DropdownMenuItem(
                                               value: value,
-                                              child: Text(value),
+                                              child: Text(
+                                                value,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
                                           )
                                           .toList(),
@@ -2684,6 +2742,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                                 const SizedBox(height: 6),
                                 DropdownButtonFormField<String>(
                                   initialValue: _rxRenewal,
+                                  isExpanded: true,
                                   decoration: InputDecoration(
                                     filled: true,
                                     fillColor: AppColors.g50,
@@ -2701,7 +2760,10 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                                           .map(
                                             (value) => DropdownMenuItem(
                                               value: value,
-                                              child: Text(value),
+                                              child: Text(
+                                                value,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
                                           )
                                           .toList(),
@@ -3118,8 +3180,9 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
     DateTime appointmentDate = DateTime.now().add(const Duration(hours: 1));
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      useRootNavigator: true,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           title: const Text('Nouveau rendez-vous'),
           content: SizedBox(
             width: 420,
@@ -3150,14 +3213,14 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                 OutlinedButton.icon(
                   onPressed: () async {
                     final date = await showDatePicker(
-                      context: context,
+                      context: dialogContext,
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 365)),
                       initialDate: appointmentDate,
                     );
-                    if (date == null || !context.mounted) return;
+                    if (date == null || !dialogContext.mounted) return;
                     final time = await showTimePicker(
-                      context: context,
+                      context: dialogContext,
                       initialTime: TimeOfDay.fromDateTime(appointmentDate),
                     );
                     if (time == null) return;
@@ -3179,11 +3242,11 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Annuler'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Créer'),
             ),
           ],
@@ -3211,6 +3274,25 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
     }
   }
 
+  Future<void> _updateAppointmentStatus(String id, String status) async {
+    if (id.isEmpty) return;
+    try {
+      await ref.read(apiServiceProvider).updateRendezVousStatus(id, status);
+      await _loadData();
+      if (!mounted) return;
+      _showActionMessage(
+        status == 'cancelled'
+            ? 'Rendez-vous annulé.'
+            : 'Statut du rendez-vous mis à jour.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showActionMessage(
+        'Mise à jour impossible : ${error.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
+  }
+
   Widget _appointmentsView() {
     if (_appointments.isEmpty) {
       return Center(
@@ -3230,9 +3312,12 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
           children: [
             ..._appointments.map(
               (item) => _AppointmentItem(
+                id: item['id']?.toString() ?? '',
                 time: item['time'] as String,
                 name: item['name'] as String,
                 reason: item['reason'] as String,
+                status: item['status']?.toString() ?? 'planned',
+                onStatusChanged: _updateAppointmentStatus,
               ),
             ),
             Align(
@@ -3923,14 +4008,20 @@ class _PatientItem extends StatelessWidget {
 }
 
 class _AppointmentItem extends StatelessWidget {
+  final String id;
   final String time;
   final String name;
   final String reason;
+  final String status;
+  final Future<void> Function(String id, String status) onStatusChanged;
 
   const _AppointmentItem({
+    required this.id,
     required this.time,
     required this.name,
     required this.reason,
+    required this.status,
+    required this.onStatusChanged,
   });
 
   @override
@@ -3979,7 +4070,15 @@ class _AppointmentItem extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.g500),
+          PopupMenuButton<String>(
+            tooltip: 'Actions du rendez-vous',
+            onSelected: (value) => onStatusChanged(id, value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'confirmed', child: Text('Confirmer')),
+              PopupMenuItem(value: 'completed', child: Text('Marquer terminé')),
+              PopupMenuItem(value: 'cancelled', child: Text('Annuler')),
+            ],
+          ),
         ],
       ),
     );

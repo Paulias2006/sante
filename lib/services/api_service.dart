@@ -161,10 +161,7 @@ class ApiService {
   }) async {
     final response = await _dio.patch(
       '/auth/password',
-      data: {
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-      },
+      data: {'currentPassword': currentPassword, 'newPassword': newPassword},
     );
     if (response.statusCode != 200) {
       throw Exception(response.data['message'] ?? 'Mot de passe non modifié');
@@ -526,6 +523,20 @@ class ApiService {
       return Map<String, dynamic>.from(response.data ?? {});
     }
     throw Exception(response.data['message'] ?? 'Failed to create appointment');
+  }
+
+  Future<Map<String, dynamic>> updateRendezVousStatus(
+    String id,
+    String status,
+  ) async {
+    final response = await _dio.patch(
+      '/rendezvous/$id/status',
+      data: {'status': status},
+    );
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(response.data ?? {});
+    }
+    throw Exception(response.data['message'] ?? 'Failed to update appointment');
   }
 
   // Token management

@@ -39,6 +39,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   DateTime? _historyFrom;
   DateTime? _historyTo;
   bool _biometricEnabled = false;
+  String _ordonnanceFilter = 'Toutes';
+  String _analyseFilter = 'Toutes';
 
   bool _inSelectedPeriod(dynamic value) {
     final date = DateTime.tryParse(value?.toString() ?? '');
@@ -232,10 +234,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   void _showDossierDetail(String title, String value) {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      useRootNavigator: true,
+      builder: (dialogContext) => Dialog(
         insetPadding: const EdgeInsets.all(18),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 620),
+          constraints: BoxConstraints(
+            maxWidth: 720,
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.78,
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
             child: Column(
@@ -254,7 +260,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                       ),
                     ),
                     IconButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(dialogContext),
                       icon: const Icon(Icons.close_rounded),
                       tooltip: 'Fermer',
                     ),
@@ -275,6 +281,141 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChips({
+    required List<String> values,
+    required String selected,
+    required ValueChanged<String> onSelected,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: values
+          .map(
+            (value) => ChoiceChip(
+              label: Text(value),
+              selected: selected == value,
+              onSelected: (_) => onSelected(value),
+              selectedColor: AppColors.g700,
+              labelStyle: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: selected == value ? Colors.white : AppColors.g700,
+              ),
+              side: const BorderSide(color: AppColors.s100),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  void _showOrdonnanceDetail(Map<String, dynamic> ordonnance) {
+    final medicines = (ordonnance['medicaments'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final status = ordonnance['status']?.toString() ?? 'active';
+    final instructions = ordonnance['instructionsGenerales']?.toString().trim();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            4,
+            20,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 760,
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Détail de l’ordonnance',
+                          style: GoogleFonts.syne(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.s800,
+                          ),
+                        ),
+                      ),
+                      _StatusPill(
+                        label: status,
+                        tone: status == 'active'
+                            ? AppColors.success
+                            : AppColors.warning,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Émise le ${_formattedDate(ordonnance['emiseAt'] ?? ordonnance['createdAt'])}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppColors.s500,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Médicaments prescrits',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.g700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (medicines.isEmpty)
+                    const Text('Aucun médicament renseigné.')
+                  else
+                    ...medicines.map(
+                      (medicine) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _PrescriptionRow(
+                          name: medicine['nom']?.toString() ?? 'Médicament',
+                          posologie: medicine['dose']?.toString() ?? '—',
+                          interval: medicine['frequence']?.toString() ?? '—',
+                          duration: medicine['duree']?.toString() ?? '—',
+                        ),
+                      ),
+                    ),
+                  if (instructions != null && instructions.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _patientPanel(
+                      color: AppColors.g50,
+                      child: _labelValue('Instructions', instructions),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.check_rounded, size: 17),
+                      label: const Text('Fermer'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.g700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -991,13 +1132,28 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.syne(
-                  fontSize: 25,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.s800,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => setState(() => _selectedTabIndex = 0),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    tooltip: 'Retour à l’accueil',
+                    color: AppColors.g700,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.syne(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.s800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               child,
@@ -1742,57 +1898,116 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     String? photo = _patient['photo']?.toString();
     final saved = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Modifier mes informations'),
+          title: Row(
+            children: [
+              const Expanded(child: Text('Modifier mes informations')),
+              IconButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Fermer',
+              ),
+            ],
+          ),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: AppColors.g700,
-                  backgroundImage: photo != null && photo!.isNotEmpty
-                      ? MemoryImage(base64Decode(photo!))
-                      : null,
-                  child: photo == null || photo!.isEmpty
-                      ? Text(
-                          _initials('${firstName.text} ${lastName.text}'),
-                          style: const TextStyle(color: Colors.white),
-                        )
-                      : null,
-                ),
-                TextButton.icon(
-                  onPressed: () async {
-                    final picked = await ImagePicker().pickImage(
-                      source: ImageSource.gallery,
-                      imageQuality: 75,
-                      maxWidth: 720,
-                    );
-                    if (picked == null) return;
-                    final bytes = await picked.readAsBytes();
-                    setDialogState(() => photo = base64Encode(bytes));
-                  },
-                  icon: const Icon(Icons.photo_camera_rounded),
-                  label: const Text('Changer la photo'),
-                ),
-                TextField(
-                  controller: firstName,
-                  decoration: const InputDecoration(labelText: 'Prénom'),
-                ),
-                TextField(
-                  controller: lastName,
-                  decoration: const InputDecoration(labelText: 'Nom'),
-                ),
-                TextField(
-                  controller: phone,
-                  decoration: const InputDecoration(labelText: 'Téléphone'),
-                ),
-                TextField(
-                  controller: address,
-                  decoration: const InputDecoration(labelText: 'Adresse'),
-                ),
-              ],
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: 280,
+                maxWidth: 520,
+                maxHeight: MediaQuery.sizeOf(context).height * 0.58,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Builder(
+                    builder: (_) {
+                      ImageProvider<Object>? image;
+                      if (photo != null && photo!.isNotEmpty) {
+                        try {
+                          image = MemoryImage(base64Decode(photo!));
+                        } catch (_) {
+                          image = null;
+                        }
+                      }
+                      return CircleAvatar(
+                        radius: 34,
+                        backgroundColor: AppColors.g700,
+                        backgroundImage: image,
+                        child: image == null
+                            ? Text(
+                                _initials('${firstName.text} ${lastName.text}'),
+                                style: const TextStyle(color: Colors.white),
+                              )
+                            : null,
+                      );
+                    },
+                  ),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final source = await showModalBottomSheet<ImageSource>(
+                        context: context,
+                        builder: (sheetContext) => SafeArea(
+                          child: Wrap(
+                            children: [
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.photo_library_rounded,
+                                ),
+                                title: const Text('Choisir dans la galerie'),
+                                onTap: () => Navigator.pop(
+                                  sheetContext,
+                                  ImageSource.gallery,
+                                ),
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.camera_alt_rounded),
+                                title: const Text('Prendre une photo'),
+                                onTap: () => Navigator.pop(
+                                  sheetContext,
+                                  ImageSource.camera,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                      if (source == null) return;
+                      final picked = await ImagePicker().pickImage(
+                        source: source,
+                        imageQuality: 75,
+                        maxWidth: 720,
+                      );
+                      if (picked == null) return;
+                      final bytes = await picked.readAsBytes();
+                      setDialogState(() => photo = base64Encode(bytes));
+                    },
+                    icon: const Icon(Icons.photo_camera_rounded),
+                    label: const Text('Changer la photo'),
+                  ),
+                  TextField(
+                    controller: firstName,
+                    decoration: const InputDecoration(labelText: 'Prénom'),
+                  ),
+                  TextField(
+                    controller: lastName,
+                    decoration: const InputDecoration(labelText: 'Nom'),
+                  ),
+                  TextField(
+                    controller: phone,
+                    decoration: const InputDecoration(labelText: 'Téléphone'),
+                  ),
+                  TextField(
+                    controller: address,
+                    decoration: const InputDecoration(labelText: 'Adresse'),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -2426,6 +2641,13 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Widget _buildOrdonnances() {
+    final visible = _filteredOrdonnances.where((item) {
+      if (_ordonnanceFilter == 'Toutes') return true;
+      final status = item['status']?.toString().toLowerCase();
+      return _ordonnanceFilter == 'Actives'
+          ? status == 'active' || status == 'partial'
+          : status == 'delivered' || status == 'expired';
+    }).toList();
     if (_filteredOrdonnances.isEmpty) {
       return _emptyState('Aucune ordonnance disponible pour ce dossier.');
     }
@@ -2436,25 +2658,52 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _historyPeriodControls(),
-          Text(
-            'Ordonnances',
-            style: GoogleFonts.syne(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: AppColors.s800,
-            ),
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _selectedTabIndex = 0),
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: AppColors.g700,
+                tooltip: 'Retour à l’accueil',
+              ),
+              Expanded(
+                child: Text(
+                  'Ordonnances',
+                  style: GoogleFonts.syne(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.s800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _filterChips(
+            values: const ['Toutes', 'Actives', 'Terminées'],
+            selected: _ordonnanceFilter,
+            onSelected: (value) => setState(() => _ordonnanceFilter = value),
           ),
           const SizedBox(height: 20),
-          for (final item in _filteredOrdonnances)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _PrescriptionDetailsCard(
-                ordonnance: item,
-                formattedDate: _formattedDate,
-                medicaments: (item['medicaments'] as List? ?? const [])
-                    .whereType<Map>()
-                    .map((medicine) => Map<String, dynamic>.from(medicine))
-                    .toList(),
+          if (visible.isEmpty)
+            _emptyState('Aucune ordonnance ne correspond à ce filtre.')
+          else
+            ...visible.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: InkWell(
+                  onTap: () =>
+                      _showOrdonnanceDetail(Map<String, dynamic>.from(item)),
+                  borderRadius: BorderRadius.circular(16),
+                  child: _PrescriptionDetailsCard(
+                    ordonnance: Map<String, dynamic>.from(item),
+                    formattedDate: _formattedDate,
+                    medicaments: (item['medicaments'] as List? ?? const [])
+                        .whereType<Map>()
+                        .map((medicine) => Map<String, dynamic>.from(medicine))
+                        .toList(),
+                  ),
+                ),
               ),
             ),
         ],
@@ -2463,6 +2712,16 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Widget _buildAnalyses() {
+    final visible = _filteredAnalyses.where((item) {
+      if (_analyseFilter == 'Toutes') return true;
+      final resultats = item['resultats'] as List? ?? const [];
+      final statuses = resultats
+          .whereType<Map>()
+          .map((result) => _analysisStatusLabel(result['statut']?.toString()))
+          .toSet();
+      if (_analyseFilter == 'En attente') return resultats.isEmpty;
+      return statuses.contains(_analyseFilter);
+    }).toList();
     if (_filteredAnalyses.isEmpty) {
       return _emptyState(
         'Aucune analyse ou résultat de consultation disponible.',
@@ -2470,7 +2729,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     }
 
     final items = <_AnalysisItem>[];
-    for (final item in _filteredAnalyses) {
+    for (final item in visible) {
       final resultats = item['resultats'] as List? ?? const [];
       if (resultats.isEmpty) {
         items.add(
@@ -2502,16 +2761,51 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _historyPeriodControls(),
-          Text(
-            'Analyses',
-            style: GoogleFonts.syne(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: AppColors.s800,
-            ),
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _selectedTabIndex = 0),
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: AppColors.g700,
+                tooltip: 'Retour à l’accueil',
+              ),
+              Expanded(
+                child: Text(
+                  'Analyses',
+                  style: GoogleFonts.syne(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.s800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _filterChips(
+            values: const [
+              'Toutes',
+              'Normal',
+              'Bas',
+              'Élevé',
+              'Critique',
+              'En attente',
+            ],
+            selected: _analyseFilter,
+            onSelected: (value) => setState(() => _analyseFilter = value),
           ),
           const SizedBox(height: 20),
-          _AnalysisCard(title: 'Résultats du dossier', items: items),
+          if (visible.isEmpty)
+            _emptyState('Aucun résultat ne correspond à ce filtre.')
+          else
+            _AnalysisCard(
+              title: 'Résultats du dossier',
+              items: items,
+              onItemTap: (item) => _showDossierDetail(
+                item.label,
+                '${item.value}\n\nStatut : ${item.status}',
+              ),
+            ),
         ],
       ),
     );
@@ -3069,16 +3363,20 @@ class _MiniField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.s200),
-        color: Colors.white,
-      ),
-      child: Text(
-        value,
-        style: GoogleFonts.inter(fontSize: 10, color: AppColors.g700),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.s200),
+          color: Colors.white,
+        ),
+        child: Text(
+          value,
+          softWrap: true,
+          style: GoogleFonts.inter(fontSize: 10, color: AppColors.g700),
+        ),
       ),
     );
   }
@@ -3391,8 +3689,13 @@ class _PrescriptionDetailsCard extends StatelessWidget {
 class _AnalysisCard extends StatelessWidget {
   final String title;
   final List<_AnalysisItem> items;
+  final ValueChanged<_AnalysisItem>? onItemTap;
 
-  const _AnalysisCard({required this.title, required this.items});
+  const _AnalysisCard({
+    required this.title,
+    required this.items,
+    this.onItemTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3418,48 +3721,67 @@ class _AnalysisCard extends StatelessWidget {
           ...items.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    item.label,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.s500,
-                    ),
+              child: InkWell(
+                onTap: onItemTap == null ? null : () => onItemTap!(item),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.g50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.s100),
                   ),
-                  Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item.value,
+                        item.label,
+                        softWrap: true,
                         style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.s800,
+                          fontSize: 12,
+                          color: AppColors.s600,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _statusColor(item.status),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          item.status,
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: _statusTextColor(item.status),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            item.value,
+                            softWrap: true,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.s800,
+                            ),
                           ),
-                        ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _statusColor(item.status),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              item.status,
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: _statusTextColor(item.status),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
