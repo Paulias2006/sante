@@ -25,13 +25,15 @@ class AppConstants {
 
   // API
   static String get apiHost {
-    const configuredHost = String.fromEnvironment('SANTE_API_HOST');
+    const configuredHost = String.fromEnvironment(
+      'SANTE_API_HOST',
+      defaultValue: 'https://sante-vq36.onrender.com',
+    );
     return configuredHost.trim().replaceFirst(RegExp(r'/$'), '');
   }
 
-  static String get baseUrl => apiHost.isEmpty ? '/api' : '$apiHost/api';
-  static String get healthCheck =>
-      apiHost.isEmpty ? '/health' : '$apiHost/health';
+  static String get baseUrl => '$apiHost/api';
+  static String get healthCheck => '$apiHost/health';
 
   // Cache keys
   static const String keyAccessToken = 'access_token';
