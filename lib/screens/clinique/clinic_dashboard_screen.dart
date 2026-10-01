@@ -440,12 +440,20 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       ),
     ];
 
+    final mobileBottomItems = [
+      navItems[0],
+      navItems[1],
+      navItems[3],
+      navItems[6],
+    ];
+
     return SanteDashboardShell(
       title: 'Espace clinique',
       subtitle: 'Suivi des patients, consultations, ordonnances et rapports',
       userName: userName,
       userRole: roleLabel,
       navItems: navItems,
+      mobileBottomItems: mobileBottomItems,
       headerAction: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(

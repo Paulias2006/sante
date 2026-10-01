@@ -30,6 +30,15 @@ class _PharmacyDashboardScreenState
   DateTime? _historyFrom;
   DateTime? _historyTo;
   final Map<int, bool> _medicineStock = {};
+  final _settingsFirstNameController = TextEditingController();
+  final _settingsLastNameController = TextEditingController();
+  final _settingsNameController = TextEditingController();
+  final _settingsAddressController = TextEditingController();
+  final _settingsCityController = TextEditingController();
+  final _settingsPhoneController = TextEditingController();
+  final _settingsEmailController = TextEditingController();
+  bool _settingsReady = false;
+  bool _savingSettings = false;
 
   @override
   void initState() {
@@ -40,7 +49,69 @@ class _PharmacyDashboardScreenState
   @override
   void dispose() {
     _qrController.dispose();
+    _settingsFirstNameController.dispose();
+    _settingsLastNameController.dispose();
+    _settingsNameController.dispose();
+    _settingsAddressController.dispose();
+    _settingsCityController.dispose();
+    _settingsPhoneController.dispose();
+    _settingsEmailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPharmacySettings() async {
+    if (_settingsReady) return;
+    try {
+      final profile = await ref.read(apiServiceProvider).getMyProfile();
+      final user = Map<String, dynamic>.from(profile['user'] ?? {});
+      final entite = Map<String, dynamic>.from(profile['entite'] ?? {});
+      if (!mounted) return;
+      setState(() {
+        _settingsFirstNameController.text = (user['prenom'] ?? '').toString();
+        _settingsLastNameController.text = (user['nom'] ?? '').toString();
+        _settingsNameController.text = (entite['nom'] ?? '').toString();
+        _settingsAddressController.text = (entite['adresse'] ?? '').toString();
+        _settingsCityController.text = (entite['ville'] ?? '').toString();
+        _settingsPhoneController.text = (entite['telephone'] ?? user['telephone'] ?? '').toString();
+        _settingsEmailController.text = (entite['email'] ?? user['email'] ?? '').toString();
+        _settingsReady = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Paramètres indisponibles : $error')),
+      );
+    }
+  }
+
+  Future<void> _savePharmacySettings() async {
+    setState(() => _savingSettings = true);
+    try {
+      await ref.read(apiServiceProvider).updateMyProfile({
+        'nom': _settingsLastNameController.text.trim(),
+        'prenom': _settingsFirstNameController.text.trim(),
+        'telephone': _settingsPhoneController.text.trim(),
+        'entite': {
+          'nom': _settingsNameController.text.trim(),
+          'adresse': _settingsAddressController.text.trim(),
+          'ville': _settingsCityController.text.trim(),
+          'telephone': _settingsPhoneController.text.trim(),
+          'email': _settingsEmailController.text.trim(),
+        },
+      });
+      await ref.read(authStateProvider.notifier).refreshUser();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Paramètres pharmacie enregistrés.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Enregistrement impossible : $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingSettings = false);
+    }
   }
 
   Future<void> _loadData() async {
@@ -300,6 +371,15 @@ class _PharmacyDashboardScreenState
         selected: _selectedTabIndex == 2,
         onTap: () => setState(() => _selectedTabIndex = 2),
       ),
+      SanteDashboardNavItem(
+        icon: Icons.settings_rounded,
+        label: 'Paramètres',
+        selected: _selectedTabIndex == 3,
+        onTap: () {
+          setState(() => _selectedTabIndex = 3);
+          _loadPharmacySettings();
+        },
+      ),
     ];
 
     return SanteDashboardShell(
@@ -308,6 +388,7 @@ class _PharmacyDashboardScreenState
       navItems: navItems,
       userName: userName,
       userRole: 'Pharmacien',
+      mobileBottomItems: navItems,
       headerAction: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -345,9 +426,81 @@ class _PharmacyDashboardScreenState
         return _scannerView();
       case 1:
         return _deliveriesView();
+      case 3:
+        return _settingsView();
       default:
         return _statsView();
     }
+  }
+
+  Widget _settingsView() {
+    if (!_settingsReady) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Paramètres', style: GoogleFonts.syne(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.g800)),
+          const SizedBox(height: 6),
+          Text('Informations de la pharmacie et du compte connecté.', style: GoogleFonts.inter(color: AppColors.g600)),
+          const SizedBox(height: 18),
+          _settingsPanel(
+            title: 'Compte utilisateur',
+            children: [
+              _settingsField(_settingsFirstNameController, 'Prénom', Icons.person_rounded),
+              _settingsField(_settingsLastNameController, 'Nom', Icons.badge_rounded),
+              _settingsField(_settingsEmailController, 'Email', Icons.email_rounded, keyboardType: TextInputType.emailAddress),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _settingsPanel(
+            title: 'Pharmacie',
+            children: [
+              _settingsField(_settingsNameController, 'Nom de la pharmacie', Icons.local_pharmacy_rounded),
+              _settingsField(_settingsAddressController, 'Adresse', Icons.location_on_rounded),
+              _settingsField(_settingsCityController, 'Ville', Icons.location_city_rounded),
+              _settingsField(_settingsPhoneController, 'Téléphone', Icons.phone_rounded, keyboardType: TextInputType.phone),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _savingSettings ? null : _savePharmacySettings,
+              icon: _savingSettings
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save_rounded),
+              label: const Text('Enregistrer les paramètres'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsPanel({required String title, required List<Widget> children}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: AppColors.s100), borderRadius: BorderRadius.circular(16)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.g800)),
+        const SizedBox(height: 12),
+        LayoutBuilder(builder: (context, constraints) {
+          final width = constraints.maxWidth >= 680 ? (constraints.maxWidth - 12) / 2 : constraints.maxWidth;
+          return Wrap(spacing: 12, runSpacing: 12, children: children.map((child) => SizedBox(width: width, child: child)).toList());
+        }),
+      ]),
+    );
+  }
+
+  Widget _settingsField(TextEditingController controller, String label, IconData icon, {TextInputType? keyboardType}) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: const OutlineInputBorder()),
+    );
   }
 
   Widget _scannerView() {

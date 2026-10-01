@@ -10,6 +10,7 @@ import 'screens/patient/patient_home_screen.dart';
 import 'screens/pharmacie/pharmacy_dashboard_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/notification_service.dart';
+import 'services/biometric_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,11 +84,85 @@ class _RootScreenState extends ConsumerState<_RootScreen> {
         if (user == null) {
           return const LoginScreen();
         }
-        return _buildDashboardForRole(user);
+        return _BiometricGate(
+          key: ValueKey(user.id),
+          child: _buildDashboardForRole(user),
+        );
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => const LoginScreen(),
+    );
+  }
+}
+
+class _BiometricGate extends StatefulWidget {
+  final Widget child;
+
+  const _BiometricGate({super.key, required this.child});
+
+  @override
+  State<_BiometricGate> createState() => _BiometricGateState();
+}
+
+class _BiometricGateState extends State<_BiometricGate> {
+  bool _checking = true;
+  bool _enabled = false;
+  bool _unlocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkSessionLock();
+  }
+
+  Future<void> _checkSessionLock() async {
+    final enabled = await BiometricService.instance.isEnabled();
+    if (!enabled) {
+      if (!mounted) return;
+      setState(() {
+        _enabled = false;
+        _unlocked = true;
+        _checking = false;
+      });
+      return;
+    }
+    final unlocked = await BiometricService.instance.authenticate();
+    if (!mounted) return;
+    setState(() {
+      _enabled = true;
+      _unlocked = unlocked;
+      _checking = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_checking) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_unlocked) return widget.child;
+
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.fingerprint_rounded, size: 64),
+              const SizedBox(height: 16),
+              const Text('Déverrouillez SantéTogo'),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _checkSessionLock,
+                icon: const Icon(Icons.fingerprint_rounded),
+                label: Text(_enabled ? 'Réessayer' : 'Déverrouiller'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

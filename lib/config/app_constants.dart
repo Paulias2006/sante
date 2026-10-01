@@ -45,4 +45,5 @@ class AppConstants {
   static const String keyUser = 'user_data';
   static const String keyPatientQr = 'patient_qr_code';
   static const String keyLastSync = 'last_sync_timestamp';
+  static const String keyBiometricEnabled = 'biometric_enabled';
 }

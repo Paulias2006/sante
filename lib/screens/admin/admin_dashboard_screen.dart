@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
@@ -105,38 +107,50 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   }
 
   Future<void> _exportDashboardReport() async {
-    final lines = [
-      'SantéTogo - Export admin',
-      'Date: ${DateTime.now().toIso8601String()}',
-      'Patients: ${_stats['totalPatients'] ?? _patients.length}',
-      'Cliniques: ${_stats['totalClinics'] ?? _clinics.length}',
-      'Pharmacies: ${_pharmacies.length}',
-      'Ordonnances: ${_stats['totalOrdonnances'] ?? 0}',
-      'Cartes: ${_stats['totalCartes'] ?? _cartes.length}',
-      'Cliniques en attente: ${_stats['pendingClinics'] ?? 0}',
-      'Pharmacies en attente: ${_stats['pendingPharmacies'] ?? 0}',
-      'Logs: ${_logs.length}',
-      '',
-      'Cliniques',
-      ..._clinics.map(
-        (item) =>
-            '${_clinicName(item)};${item['email'] ?? '—'};${item['status'] ?? item['statut'] ?? '—'}',
+    final document = pw.Document();
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (_) => [
+          pw.Header(level: 0, text: 'SantéTogo - Rapport administrateur'),
+          pw.Text('Généré le ${DateTime.now().toIso8601String()}'),
+          pw.SizedBox(height: 16),
+          pw.TableHelper.fromTextArray(
+            headers: const ['Indicateur', 'Valeur'],
+            data: [
+              ['Patients', '${_stats['totalPatients'] ?? _patients.length}'],
+              ['Cliniques', '${_stats['totalClinics'] ?? _clinics.length}'],
+              ['Pharmacies', '${_pharmacies.length}'],
+              ['Ordonnances', '${_stats['totalOrdonnances'] ?? 0}'],
+              ['Cartes', '${_stats['totalCartes'] ?? _cartes.length}'],
+              ['Cliniques en attente', '${_stats['pendingClinics'] ?? 0}'],
+              ['Pharmacies en attente', '${_stats['pendingPharmacies'] ?? 0}'],
+              ['Journaux', '${_logs.length}'],
+            ],
+          ),
+          pw.SizedBox(height: 18),
+          pw.Header(level: 1, text: 'Cliniques'),
+          ..._clinics.map(
+            (item) => pw.Text(
+              '${_clinicName(item)} · ${item['email'] ?? '—'} · ${item['status'] ?? item['statut'] ?? '—'}',
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Header(level: 1, text: 'Pharmacies'),
+          ..._pharmacies.map(
+            (item) => pw.Text(
+              '${item['nom'] ?? 'Pharmacie'} · ${item['email'] ?? '—'} · ${item['status'] ?? item['statut'] ?? '—'}',
+            ),
+          ),
+        ],
       ),
-      '',
-      'Pharmacies',
-      ..._pharmacies.map(
-        (item) =>
-            '${item['nom'] ?? 'Pharmacie'};${item['email'] ?? '—'};${item['status'] ?? item['statut'] ?? '—'}',
-      ),
-    ].join('\n');
+    );
 
-    await Clipboard.setData(ClipboardData(text: lines));
+    final bytes = await document.save();
+    await Printing.sharePdf(bytes: bytes, filename: 'rapport-santetogo-admin.pdf');
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Export admin copié.'),
-        backgroundColor: AppColors.g700,
-      ),
+      const SnackBar(content: Text('Rapport PDF prêt à être partagé ou imprimé.')),
     );
   }
 
@@ -1736,6 +1750,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       _ => 'Fondateur',
     };
 
+    final mobileBottomItems = [
+      navItems[0],
+      navItems[4],
+      navItems[3],
+      navItems[6],
+    ];
+
     return SanteDashboardShell(
       title: 'Tableau de bord',
       subtitle: '— vue d\'ensemble santé',
@@ -1743,6 +1764,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       userName: userName,
       userRole: userRole,
       headerAction: topAction,
+      mobileBottomItems: mobileBottomItems,
       body: Builder(
         builder: (context) {
           if (_loading) {

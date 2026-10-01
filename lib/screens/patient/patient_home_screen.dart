@@ -7,12 +7,14 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
 import 'package:sante/widgets/qr_widgets.dart';
 import 'package:sante/widgets/sante_shell.dart';
 import 'package:sante/services/notification_service.dart';
 import 'package:sante/services/local_storage_service.dart';
+import 'package:sante/services/biometric_service.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -35,6 +37,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   List<dynamic> _delivrances = [];
   DateTime? _historyFrom;
   DateTime? _historyTo;
+  bool _biometricEnabled = false;
 
   bool _inSelectedPeriod(dynamic value) {
     final date = DateTime.tryParse(value?.toString() ?? '');
@@ -280,6 +283,9 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   @override
   void initState() {
     super.initState();
+    BiometricService.instance.isEnabled().then((enabled) {
+      if (mounted) setState(() => _biometricEnabled = enabled);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadPatientData());
   }
 
@@ -1435,6 +1441,28 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   onTap: _changePassword,
                 ),
                 _settingsAction(
+                  icon: Icons.fingerprint_rounded,
+                  title: 'Authentification biométrique',
+                  subtitle: _biometricEnabled
+                      ? 'Empreinte activée sur cet appareil'
+                      : 'Protéger l’ouverture de l’application',
+                  trailing: Switch(
+                    value: _biometricEnabled,
+                    activeThumbColor: AppColors.g700,
+                    onChanged: (value) async {
+                      final enabled = await BiometricService.instance.setEnabled(value);
+                      if (!mounted) return;
+                      if (!enabled && value) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Aucune biométrie disponible ou authentification annulée.')),
+                        );
+                        return;
+                      }
+                      setState(() => _biometricEnabled = value);
+                    },
+                  ),
+                ),
+                _settingsAction(
                   icon: Icons.notifications_none_rounded,
                   title: 'Notifications',
                   subtitle: 'Rappels liés aux traitements actifs',
@@ -1558,25 +1586,48 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     final lastName = TextEditingController(text: _patient['nom']?.toString() ?? user.nom);
     final phone = TextEditingController(text: _patient['telephone']?.toString() ?? user.telephone);
     final address = TextEditingController(text: _patient['adresse']?.toString() ?? user.adresse);
+    String? photo = _patient['photo']?.toString();
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Modifier mes informations'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: firstName, decoration: const InputDecoration(labelText: 'Prénom')),
-              TextField(controller: lastName, decoration: const InputDecoration(labelText: 'Nom')),
-              TextField(controller: phone, decoration: const InputDecoration(labelText: 'Téléphone')),
-              TextField(controller: address, decoration: const InputDecoration(labelText: 'Adresse')),
-            ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Modifier mes informations'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 34,
+                  backgroundColor: AppColors.g700,
+                  backgroundImage: photo != null && photo!.isNotEmpty
+                      ? MemoryImage(base64Decode(photo!))
+                      : null,
+                  child: photo == null || photo!.isEmpty
+                      ? Text(_initials('${firstName.text} ${lastName.text}'), style: const TextStyle(color: Colors.white))
+                      : null,
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 720);
+                    if (picked == null) return;
+                    final bytes = await picked.readAsBytes();
+                    setDialogState(() => photo = base64Encode(bytes));
+                  },
+                  icon: const Icon(Icons.photo_camera_rounded),
+                  label: const Text('Changer la photo'),
+                ),
+                TextField(controller: firstName, decoration: const InputDecoration(labelText: 'Prénom')),
+                TextField(controller: lastName, decoration: const InputDecoration(labelText: 'Nom')),
+                TextField(controller: phone, decoration: const InputDecoration(labelText: 'Téléphone')),
+                TextField(controller: address, decoration: const InputDecoration(labelText: 'Adresse')),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Enregistrer')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Enregistrer')),
-        ],
       ),
     );
     if (saved != true || !mounted) {
@@ -1592,6 +1643,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         'nom': lastName.text.trim(),
         'telephone': phone.text.trim(),
         'adresse': address.text.trim(),
+        'photo': photo ?? '',
       });
       await ref.read(authStateProvider.notifier).refreshUser();
       await _loadPatientData();
