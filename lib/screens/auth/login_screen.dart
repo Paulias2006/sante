@@ -14,23 +14,41 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SingleTickerProviderStateMixin {
   late TextEditingController _emailController;
   late TextEditingController _passwordController;
   bool _obscurePassword = true;
   bool _isSubmitting = false;
+  late final AnimationController _introController;
+  late final Animation<double> _introFade;
+  late final Animation<Offset> _introSlide;
 
   @override
   void initState() {
     super.initState();
     _emailController = TextEditingController();
     _passwordController = TextEditingController();
+    _introController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _introFade = CurvedAnimation(
+      parent: _introController,
+      curve: Curves.easeOut,
+    );
+    _introSlide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _introController, curve: Curves.easeOutCubic),
+        );
+    _introController.forward();
   }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _introController.dispose();
     super.dispose();
   }
 
@@ -289,7 +307,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return SanteAuthShell(
       title: 'Connexion',
       subtitle: 'Accédez à votre compte SantéTogo',
-      child: form,
+      child: FadeTransition(
+        opacity: _introFade,
+        child: SlideTransition(position: _introSlide, child: form),
+      ),
     );
   }
 }

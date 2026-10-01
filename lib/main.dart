@@ -11,6 +11,7 @@ import 'screens/pharmacie/pharmacy_dashboard_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/notification_service.dart';
 import 'services/biometric_service.dart';
+import 'widgets/sante_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +32,7 @@ class SanteTogoApp extends StatelessWidget {
       title: 'SantéTogo',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme(),
-      home: const _RootScreen(),
+      home: const _StartupScreen(),
     );
   }
 }
@@ -92,6 +93,78 @@ class _RootScreenState extends ConsumerState<_RootScreen> {
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => const LoginScreen(),
+    );
+  }
+}
+
+class _StartupScreen extends StatefulWidget {
+  const _StartupScreen();
+
+  @override
+  State<_StartupScreen> createState() => _StartupScreenState();
+}
+
+class _StartupScreenState extends State<_StartupScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _scale = Tween<double>(
+      begin: 0.78,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _ready = true);
+      }
+    });
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_ready) return const _RootScreen();
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5FAF8),
+      body: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) => Opacity(
+            opacity: _fade.value,
+            child: Transform.scale(scale: _scale.value, child: child),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SanteBrandLogo(emblemSize: 104),
+              const SizedBox(height: 18),
+              Text(
+                'Dossier médical numérique',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF0A6B55),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -24,4 +24,4 @@ services:
       - key: JWT_REFRESH_EXPIRY
         value: 7d
       - key: CORS_ORIGIN
-        value: "*"
+        sync: false

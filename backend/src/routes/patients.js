@@ -297,7 +297,11 @@ router.get('/:id', async (req, res) => {
       ipAddress: req.ip,
     });
 
-    res.json({ patient, consultations, ordonnances, analyses, delivrances });
+    const commandesCartes = await CommandeCarte.find({ patients: patient._id })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json({ patient, consultations, ordonnances, analyses, delivrances, commandesCartes });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lecture patient', error: error.message });
   }
@@ -309,6 +313,17 @@ router.post('/:id/commande-carte', async (req, res) => {
     if (!patient) return fail(res, 'Patient introuvable', 404);
     if (!patientCanAccess(req, patient._id)) {
       return fail(res, 'Accès non autorisé', 403);
+    }
+
+    const existing = await CommandeCarte.findOne({
+      patients: patient._id,
+      status: { $in: ['pending', 'printing', 'shipped'] },
+    });
+    if (existing) {
+      return res.status(409).json({
+        message: 'Une commande de carte est déjà en cours pour ce patient.',
+        commande: existing,
+      });
     }
 
     const commande = await CommandeCarte.create({

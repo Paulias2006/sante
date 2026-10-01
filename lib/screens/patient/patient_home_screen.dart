@@ -35,6 +35,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   List<dynamic> _consultations = [];
   List<dynamic> _analyses = [];
   List<dynamic> _delivrances = [];
+  List<dynamic> _cardOrders = [];
   DateTime? _historyFrom;
   DateTime? _historyTo;
   bool _biometricEnabled = false;
@@ -190,7 +191,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Future<void> _sharePatientQr() async {
-    final value = (_patient['qrToken'] ?? _patient['dossierNumber'] ?? '').toString();
+    final value = (_patient['qrToken'] ?? _patient['dossierNumber'] ?? '')
+        .toString();
     if (value.isEmpty) return;
     final painter = QrPainter(
       data: value,
@@ -326,6 +328,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       final consultations = List<dynamic>.from(dossier['consultations'] ?? []);
       final analyses = List<dynamic>.from(dossier['analyses'] ?? []);
       final delivrances = List<dynamic>.from(dossier['delivrances'] ?? []);
+      final cardOrders = List<dynamic>.from(dossier['commandesCartes'] ?? []);
 
       setState(() {
         _patient = patient;
@@ -333,6 +336,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         _consultations = consultations;
         _analyses = analyses;
         _delivrances = delivrances;
+        _cardOrders = cardOrders;
         _loading = false;
       });
       try {
@@ -356,8 +360,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         ? 'Compte patient non relié'
         : 'Dossier indisponible';
     final message = _missingPatientLink
-        ? 'Ce compte patient ne possède pas encore de patientId associé.'
-        : (_loadError ?? 'Le dossier n’a pas pu être chargé.');
+        ? 'Ce compte patient ne possède pas encore de patientId associé. Contactez votre clinique.'
+        : (_loadError == null || _loadError!.isEmpty
+              ? 'Connexion au serveur impossible. Vérifiez Internet puis réessayez.'
+              : 'Connexion au serveur impossible : $_loadError');
 
     return Center(
       child: SingleChildScrollView(
@@ -689,7 +695,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       SanteDashboardNavItem(
         icon: Icons.folder_rounded,
         label: 'Documents',
-        selected: _selectedTabIndex == 2 || _selectedTabIndex == 3 || _selectedTabIndex == 4 || _selectedTabIndex == 8,
+        selected:
+            _selectedTabIndex == 2 ||
+            _selectedTabIndex == 3 ||
+            _selectedTabIndex == 4 ||
+            _selectedTabIndex == 8,
         onTap: () => _openPatientSection(8),
       ),
       SanteDashboardNavItem(
@@ -1143,7 +1153,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             color: AppColors.g50,
             child: Row(
               children: [
-                const Icon(Icons.bloodtype_rounded, color: AppColors.g700, size: 30),
+                const Icon(
+                  Icons.bloodtype_rounded,
+                  color: AppColors.g700,
+                  size: 30,
+                ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: _labelValue(
@@ -1202,7 +1216,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           ),
         ),
         const SizedBox(height: 5),
-        Text(value, style: GoogleFonts.inter(fontSize: 13, color: AppColors.s600)),
+        Text(
+          value,
+          style: GoogleFonts.inter(fontSize: 13, color: AppColors.s600),
+        ),
       ],
     );
   }
@@ -1223,15 +1240,32 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: tone)),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  color: tone,
+                ),
+              ),
               const SizedBox(height: 8),
               if (items.isEmpty)
-                Text(empty, style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600))
+                Text(
+                  empty,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600),
+                )
               else
-                ...items.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 5),
-                      child: Text('• $item', style: GoogleFonts.inter(fontSize: 12, color: AppColors.s700)),
-                    )),
+                ...items.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Text(
+                      '• $item',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.s700,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1270,39 +1304,50 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   Widget _buildMedicalHistory() {
     final entries = <Widget>[];
     for (final item in _filteredConsultations) {
-      entries.add(_historyEntry(
-        date: _formattedDate(item['date'] ?? item['createdAt']),
-        title: item['motif']?.toString() ?? 'Consultation',
-        detail: item['diagnostic']?.toString() ?? 'Diagnostic non renseigné',
-        icon: Icons.medical_services_rounded,
-      ));
+      entries.add(
+        _historyEntry(
+          date: _formattedDate(item['date'] ?? item['createdAt']),
+          title: item['motif']?.toString() ?? 'Consultation',
+          detail: item['diagnostic']?.toString() ?? 'Diagnostic non renseigné',
+          icon: Icons.medical_services_rounded,
+        ),
+      );
     }
     for (final item in _filteredAnalyses) {
-      entries.add(_historyEntry(
-        date: _formattedDate(item['date'] ?? item['createdAt']),
-        title: item['type']?.toString() ?? 'Analyse',
-        detail: 'Résultats enregistrés dans le dossier',
-        icon: Icons.biotech_rounded,
-      ));
+      entries.add(
+        _historyEntry(
+          date: _formattedDate(item['date'] ?? item['createdAt']),
+          title: item['type']?.toString() ?? 'Analyse',
+          detail: 'Résultats enregistrés dans le dossier',
+          icon: Icons.biotech_rounded,
+        ),
+      );
     }
     for (final item in _filteredDelivrances) {
-      entries.add(_historyEntry(
-        date: _formattedDate(item['date'] ?? item['createdAt']),
-        title: 'Délivrance en pharmacie',
-        detail: _pharmacyName(item['pharmacie']),
-        icon: Icons.local_pharmacy_rounded,
-      ));
+      entries.add(
+        _historyEntry(
+          date: _formattedDate(item['date'] ?? item['createdAt']),
+          title: 'Délivrance en pharmacie',
+          detail: _pharmacyName(item['pharmacie']),
+          icon: Icons.local_pharmacy_rounded,
+        ),
+      );
     }
     if (entries.isEmpty) {
-      return _patientPage('Historique médical', _emptyState('Aucun événement médical enregistré.'));
+      return _patientPage(
+        'Historique médical',
+        _emptyState('Aucun événement médical enregistré.'),
+      );
     }
-    return _patientPage(
-      'Historique médical',
-      Column(children: entries),
-    );
+    return _patientPage('Historique médical', Column(children: entries));
   }
 
-  Widget _historyEntry({required String date, required String title, required String detail, required IconData icon}) {
+  Widget _historyEntry({
+    required String date,
+    required String title,
+    required String detail,
+    required IconData icon,
+  }) {
     return _patientPanel(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1310,7 +1355,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: AppColors.g50, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: AppColors.g50,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: AppColors.g700, size: 20),
           ),
           const SizedBox(width: 12),
@@ -1318,11 +1366,23 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(date, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
+                Text(
+                  date,
+                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500),
+                ),
                 const SizedBox(height: 4),
-                Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.s800)),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.s800,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(detail, style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600)),
+                Text(
+                  detail,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600),
+                ),
               ],
             ),
           ),
@@ -1351,7 +1411,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.notifications_active_rounded, color: AppColors.danger),
+                      const Icon(
+                        Icons.notifications_active_rounded,
+                        color: AppColors.danger,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _labelValue(
@@ -1377,7 +1440,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           _documentAction(
             icon: Icons.history_rounded,
             title: 'Historique médical',
-            subtitle: '${_consultations.length + _analyses.length + _delivrances.length} événement(s) enregistré(s)',
+            subtitle:
+                '${_consultations.length + _analyses.length + _delivrances.length} événement(s) enregistré(s)',
             onTap: () => _openPatientSection(4),
           ),
           _documentAction(
@@ -1403,7 +1467,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _documentAction({required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
+  Widget _documentAction({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: _patientPanel(
@@ -1412,12 +1481,27 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           leading: Container(
             width: 42,
             height: 42,
-            decoration: BoxDecoration(color: AppColors.g50, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: AppColors.g50,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: AppColors.g700),
           ),
-          title: Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.s800)),
-          subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
-          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.s400),
+          title: Text(
+            title,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              color: AppColors.s800,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500),
+          ),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.s400,
+          ),
           onTap: onTap,
         ),
       ),
@@ -1450,11 +1534,16 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     value: _biometricEnabled,
                     activeThumbColor: AppColors.g700,
                     onChanged: (value) async {
-                      final enabled = await BiometricService.instance.setEnabled(value);
+                      final enabled = await BiometricService.instance
+                          .setEnabled(value);
                       if (!mounted) return;
                       if (!enabled && value) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Aucune biométrie disponible ou authentification annulée.')),
+                          const SnackBar(
+                            content: Text(
+                              'Aucune biométrie disponible ou authentification annulée.',
+                            ),
+                          ),
                         );
                         return;
                       }
@@ -1474,13 +1563,19 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                         await ref.read(apiServiceProvider).updateMyProfile({
                           'notificationsEnabled': value,
                         });
-                        await ref.read(authStateProvider.notifier).refreshUser();
+                        await ref
+                            .read(authStateProvider.notifier)
+                            .refreshUser();
                         if (!mounted) return;
                         setState(() {});
                       } catch (error) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                          SnackBar(
+                            content: Text(
+                              error.toString().replaceFirst('Exception: ', ''),
+                            ),
+                          ),
                         );
                       }
                     },
@@ -1506,7 +1601,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               children: [
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.edit_rounded, color: AppColors.g700),
+                  leading: const Icon(
+                    Icons.edit_rounded,
+                    color: AppColors.g700,
+                  ),
                   title: const Text('Modifier mes informations'),
                   subtitle: const Text('Nom, téléphone, adresse et photo'),
                   trailing: const Icon(Icons.chevron_right_rounded),
@@ -1515,7 +1613,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 const Divider(height: 1),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.info_outline_rounded, color: AppColors.g700),
+                  leading: const Icon(
+                    Icons.info_outline_rounded,
+                    color: AppColors.g700,
+                  ),
                   title: const Text('Version de l’application'),
                   trailing: const Text('1.0.0'),
                 ),
@@ -1527,13 +1628,31 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _settingsAction({required IconData icon, required String title, required String subtitle, Widget? trailing, VoidCallback? onTap}) {
+  Widget _settingsAction({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon, color: AppColors.g700),
-      title: Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.s800)),
-      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
-      trailing: trailing ?? const Icon(Icons.chevron_right_rounded, color: AppColors.s400),
+      title: Text(
+        title,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.s800,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500),
+      ),
+      trailing:
+          trailing ??
+          const Icon(Icons.chevron_right_rounded, color: AppColors.s400),
       onTap: onTap,
     );
   }
@@ -1548,13 +1667,31 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: current, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe actuel')),
-            TextField(controller: next, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe (8 caractères minimum)')),
+            TextField(
+              controller: current,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Mot de passe actuel',
+              ),
+            ),
+            TextField(
+              controller: next,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Nouveau mot de passe (8 caractères minimum)',
+              ),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Modifier')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Modifier'),
+          ),
         ],
       ),
     );
@@ -1564,15 +1701,23 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       return;
     }
     try {
-      await ref.read(apiServiceProvider).updatePassword(
-        currentPassword: current.text,
-        newPassword: next.text,
-      );
+      await ref
+          .read(apiServiceProvider)
+          .updatePassword(
+            currentPassword: current.text,
+            newPassword: next.text,
+          );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mot de passe modifié.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Mot de passe modifié.')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
     } finally {
       current.dispose();
       next.dispose();
@@ -1582,10 +1727,18 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   Future<void> _editPatientProfile() async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
-    final firstName = TextEditingController(text: _patient['prenom']?.toString() ?? user.prenom);
-    final lastName = TextEditingController(text: _patient['nom']?.toString() ?? user.nom);
-    final phone = TextEditingController(text: _patient['telephone']?.toString() ?? user.telephone);
-    final address = TextEditingController(text: _patient['adresse']?.toString() ?? user.adresse);
+    final firstName = TextEditingController(
+      text: _patient['prenom']?.toString() ?? user.prenom,
+    );
+    final lastName = TextEditingController(
+      text: _patient['nom']?.toString() ?? user.nom,
+    );
+    final phone = TextEditingController(
+      text: _patient['telephone']?.toString() ?? user.telephone,
+    );
+    final address = TextEditingController(
+      text: _patient['adresse']?.toString() ?? user.adresse,
+    );
     String? photo = _patient['photo']?.toString();
     final saved = await showDialog<bool>(
       context: context,
@@ -1603,12 +1756,19 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                       ? MemoryImage(base64Decode(photo!))
                       : null,
                   child: photo == null || photo!.isEmpty
-                      ? Text(_initials('${firstName.text} ${lastName.text}'), style: const TextStyle(color: Colors.white))
+                      ? Text(
+                          _initials('${firstName.text} ${lastName.text}'),
+                          style: const TextStyle(color: Colors.white),
+                        )
                       : null,
                 ),
                 TextButton.icon(
                   onPressed: () async {
-                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 720);
+                    final picked = await ImagePicker().pickImage(
+                      source: ImageSource.gallery,
+                      imageQuality: 75,
+                      maxWidth: 720,
+                    );
                     if (picked == null) return;
                     final bytes = await picked.readAsBytes();
                     setDialogState(() => photo = base64Encode(bytes));
@@ -1616,16 +1776,34 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   icon: const Icon(Icons.photo_camera_rounded),
                   label: const Text('Changer la photo'),
                 ),
-                TextField(controller: firstName, decoration: const InputDecoration(labelText: 'Prénom')),
-                TextField(controller: lastName, decoration: const InputDecoration(labelText: 'Nom')),
-                TextField(controller: phone, decoration: const InputDecoration(labelText: 'Téléphone')),
-                TextField(controller: address, decoration: const InputDecoration(labelText: 'Adresse')),
+                TextField(
+                  controller: firstName,
+                  decoration: const InputDecoration(labelText: 'Prénom'),
+                ),
+                TextField(
+                  controller: lastName,
+                  decoration: const InputDecoration(labelText: 'Nom'),
+                ),
+                TextField(
+                  controller: phone,
+                  decoration: const InputDecoration(labelText: 'Téléphone'),
+                ),
+                TextField(
+                  controller: address,
+                  decoration: const InputDecoration(labelText: 'Adresse'),
+                ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Enregistrer')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Enregistrer'),
+            ),
           ],
         ),
       ),
@@ -1648,10 +1826,16 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       await ref.read(authStateProvider.notifier).refreshUser();
       await _loadPatientData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informations mises à jour.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informations mises à jour.')),
+      );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
     } finally {
       firstName.dispose();
       lastName.dispose();
@@ -2465,14 +2649,116 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                       icon: const Icon(Icons.share_rounded, size: 16),
                       label: const Text('Partager'),
                     ),
+                    FilledButton.icon(
+                      onPressed: _orderPhysicalCard,
+                      icon: const Icon(Icons.credit_card_rounded, size: 16),
+                      label: const Text('Commander la carte'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.g700,
+                      ),
+                    ),
                   ],
                 ),
+                const SizedBox(height: 14),
+                _buildCardOrderStatus(),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildCardOrderStatus() {
+    if (_cardOrders.isEmpty) {
+      return Text(
+        'Aucune commande de carte physique enregistrée.',
+        style: GoogleFonts.inter(fontSize: 12, color: AppColors.s500),
+      );
+    }
+    final order = _cardOrders.first as Map;
+    final status = order['status']?.toString() ?? 'pending';
+    final label = switch (status) {
+      'printing' => 'En impression',
+      'shipped' => 'Expédiée',
+      'delivered' => 'Livrée',
+      _ => 'En attente de traitement',
+    };
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.g50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.local_shipping_rounded, color: AppColors.g700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Carte physique : $label',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                color: AppColors.g800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _orderPhysicalCard() async {
+    final patientId = ref.read(authStateProvider).valueOrNull?.patientId;
+    if (patientId == null || patientId.isEmpty) return;
+    final active = _cardOrders.any((item) {
+      final status = (item as Map)['status']?.toString();
+      return status == 'pending' || status == 'printing' || status == 'shipped';
+    });
+    if (active) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Une commande de carte est déjà en cours.'),
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Commander une carte physique'),
+        content: const Text(
+          'La clinique rattachée transmettra la commande à l’administration pour impression et remise.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(apiServiceProvider).orderPatientCard(patientId);
+      await _loadPatientData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Commande de carte enregistrée.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
   }
 
   Future<void> _revokePatientQr() async {
@@ -2645,7 +2931,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       ),
     );
   }
-
 }
 
 class _DossierInfoPill extends StatelessWidget {
@@ -2822,49 +3107,49 @@ class _InfoCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),
       child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.s100),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: AppColors.s100),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: tint,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 16, color: AppColors.g700),
             ),
-            child: Icon(icon, size: 16, color: AppColors.g700),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.g700,
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.g700,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: GoogleFonts.syne(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.s800,
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: GoogleFonts.syne(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.s800,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: GoogleFonts.inter(fontSize: 10, color: AppColors.s500),
-          ),
-        ],
-      ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: GoogleFonts.inter(fontSize: 10, color: AppColors.s500),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2889,42 +3174,42 @@ class _PatientQuickCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.s100),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: AppColors.s100),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: tint,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 16, color: AppColors.g700),
             ),
-            child: Icon(icon, size: 16, color: AppColors.g700),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.s800,
+            const SizedBox(height: 12),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.s800,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ const Clinique = require('../models/Clinique');
 const Pharmacie = require('../models/Pharmacie');
 const { logAction } = require('../utils/logger');
 const { fail } = require('../utils/apiResponse');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
       return fail(res, 'Email et mot de passe requis', 400);
     }
 
@@ -78,12 +79,10 @@ router.post('/refresh', async (req, res) => {
   }
 });
 
-router.post('/logout', async (req, res) => {
-  const { userId } = req.body;
-
-  if (userId) {
+router.post('/logout', authenticate, async (req, res) => {
+  if (req.user?._id) {
     await logAction({
-      user: userId,
+      user: req.user._id,
       action: 'LOGOUT',
       details: 'Déconnexion utilisateur',
       ipAddress: req.ip,

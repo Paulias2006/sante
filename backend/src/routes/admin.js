@@ -1,5 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
 const Clinique = require('../models/Clinique');
 const Pharmacie = require('../models/Pharmacie');
 const User = require('../models/User');
@@ -156,7 +158,27 @@ router.get('/cartes/:id/pdf', async (req, res) => {
   try {
     const commande = await CommandeCarte.findById(req.params.id).populate('patients');
     if (!commande) return fail(res, 'Commande introuvable', 404);
-    res.json({ message: 'PDF de commande généré', commandeId: commande._id, patientCount: commande.patients.length });
+
+    const patient = commande.patients[0];
+    const qrData = patient?.qrToken
+      ? await QRCode.toDataURL(patient.qrToken, { margin: 1, width: 220 })
+      : null;
+    const document = new PDFDocument({ size: 'A4', margin: 36 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="carte-${commande._id}.pdf"`);
+    document.pipe(res);
+    document.fontSize(18).fillColor('#0A6B55').text('SantéTogo - Carte patient');
+    document.moveDown(1);
+    document.roundedRect(150, 180, 295, 188, 12).fill('#0A6B55');
+    document.fillColor('#FFFFFF').fontSize(19).text('SantéTogo', 170, 202);
+    document.fontSize(8).text('DOSSIER MEDICAL NUMERIQUE', 170, 228);
+    document.fontSize(17).text(`${patient?.prenom || ''} ${patient?.nom || ''}`.trim(), 170, 275);
+    document.fontSize(10).text(`Dossier ${patient?.dossierNumber || '—'}  ·  Groupe ${patient?.groupeSanguin || '—'}`, 170, 305);
+    if (qrData) document.image(Buffer.from(qrData.split(',')[1], 'base64'), 350, 276, { width: 72, height: 72 });
+    document.fillColor('#1A1A1A').fontSize(9).text(`Commande ${commande._id}`, 36, 420);
+    document.text(`Statut : ${commande.status}`);
+    document.text(`Nombre de cartes : ${commande.nombreCartes}`);
+    document.end();
   } catch (error) {
     res.status(500).json({ message: 'Erreur génération PDF', error: error.message });
   }
@@ -165,6 +187,9 @@ router.get('/cartes/:id/pdf', async (req, res) => {
 router.patch('/cartes/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
+    if (!['pending', 'printing', 'shipped', 'delivered'].includes(status)) {
+      return fail(res, 'Statut de carte invalide', 400);
+    }
     const commande = await CommandeCarte.findByIdAndUpdate(req.params.id, { status, deliveredAt: status === 'delivered' ? new Date() : null }, { new: true });
     if (!commande) return fail(res, 'Commande introuvable', 404);
     res.json({ message: 'Statut mis à jour', commande });

@@ -24,20 +24,14 @@ class AppConstants {
   static const String shadowMedium = '0 4px 16px rgba(7,42,31,.11)';
 
   // API
-  static const String defaultApiHost = String.fromEnvironment(
-    'SANTE_DEFAULT_API_HOST',
-    defaultValue: 'https://sante-vq36.onrender.com',
-  );
-
   static String get apiHost {
     const configuredHost = String.fromEnvironment('SANTE_API_HOST');
-    if (configuredHost.isNotEmpty) return configuredHost;
-
-    return defaultApiHost;
+    return configuredHost.trim().replaceFirst(RegExp(r'/$'), '');
   }
 
-  static String get baseUrl => '$apiHost/api';
-  static String get healthCheck => '$apiHost/health';
+  static String get baseUrl => apiHost.isEmpty ? '/api' : '$apiHost/api';
+  static String get healthCheck =>
+      apiHost.isEmpty ? '/health' : '$apiHost/health';
 
   // Cache keys
   static const String keyAccessToken = 'access_token';

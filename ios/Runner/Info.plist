@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Sante</string>
+	<string>SantéTogo</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>SantéTogo utilise Face ID pour protéger l’accès à votre dossier médical.</string>
 	<key>CFBundleExecutable</key>

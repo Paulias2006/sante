@@ -18,7 +18,8 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends State<RegisterScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nomController = TextEditingController();
   final TextEditingController _adresseController = TextEditingController();
@@ -45,6 +46,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loadingClinics = false;
   bool _isSubmitting = false;
   String _patientPhoto = '';
+  late final AnimationController _introController;
+  late final Animation<double> _introFade;
+  late final Animation<Offset> _introSlide;
 
   @override
   void dispose() {
@@ -60,12 +64,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _patientPrenomController.dispose();
     _patientDateController.dispose();
     _patientAllergiesController.dispose();
+    _introController.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _introController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _introFade = CurvedAnimation(
+      parent: _introController,
+      curve: Curves.easeOut,
+    );
+    _introSlide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _introController, curve: Curves.easeOutCubic),
+        );
+    _introController.forward();
     _loadApprovedClinics();
   }
 
@@ -350,7 +368,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return SanteAuthShell(
       title: 'Inscription',
       subtitle: 'Validation établissement et pharmacie',
-      child: formContent,
+      child: FadeTransition(
+        opacity: _introFade,
+        child: SlideTransition(position: _introSlide, child: formContent),
+      ),
     );
   }
 

@@ -147,10 +147,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
 
     final bytes = await document.save();
-    await Printing.sharePdf(bytes: bytes, filename: 'rapport-santetogo-admin.pdf');
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'rapport-santetogo-admin.pdf',
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Rapport PDF prêt à être partagé ou imprimé.')),
+      const SnackBar(
+        content: Text('Rapport PDF prêt à être partagé ou imprimé.'),
+      ),
     );
   }
 
@@ -390,6 +395,104 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         SnackBar(content: Text('Erreur mise à jour : ${e.toString()}')),
       );
     }
+  }
+
+  Future<void> _printCard(Map<String, dynamic> commande) async {
+    final patient = _patientFromCard(commande);
+    if (patient == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucun patient associé à cette commande.'),
+        ),
+      );
+      return;
+    }
+    final qrToken =
+        patient['qrToken']?.toString() ??
+        patient['dossierNumber']?.toString() ??
+        '';
+    final qrData = qrToken.isEmpty
+        ? null
+        : await QrPainter(
+            data: qrToken,
+            version: QrVersions.auto,
+          ).toImageData(320);
+    final document = pw.Document();
+    document.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (_) => pw.Center(
+          child: pw.Container(
+            width: 340,
+            height: 220,
+            padding: const pw.EdgeInsets.all(20),
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromHex('#0A6B55'),
+              borderRadius: pw.BorderRadius.circular(14),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'SanteTogo',
+                  style: pw.TextStyle(
+                    color: PdfColors.white,
+                    fontSize: 22,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'DOSSIER MEDICAL NUMERIQUE',
+                  style: const pw.TextStyle(
+                    color: PdfColors.white,
+                    fontSize: 8,
+                  ),
+                ),
+                pw.Spacer(),
+                pw.Text(
+                  '${patient['prenom'] ?? ''} ${patient['nom'] ?? ''}'.trim(),
+                  style: pw.TextStyle(
+                    color: PdfColors.white,
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+                pw.Text(
+                  'Dossier ${patient['dossierNumber'] ?? '—'}  ·  Groupe ${patient['groupeSanguin'] ?? '—'}',
+                  style: const pw.TextStyle(
+                    color: PdfColors.white,
+                    fontSize: 10,
+                  ),
+                ),
+                if (qrData != null) ...[
+                  pw.SizedBox(height: 10),
+                  pw.Align(
+                    alignment: pw.Alignment.bottomRight,
+                    child: pw.Container(
+                      width: 58,
+                      height: 58,
+                      color: PdfColors.white,
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Image(
+                        pw.MemoryImage(qrData.buffer.asUint8List()),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (_) async => document.save());
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Carte envoyée à l’impression.')),
+    );
   }
 
   List<Map<String, dynamic>> get _hospitals {
@@ -1152,6 +1255,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                                       minimumSize: const Size(0, 0),
                                     ),
                                     child: const Text('Voir'),
+                                  ),
+                                  IconButton(
+                                    onPressed: () => _printCard(item),
+                                    icon: const Icon(
+                                      Icons.print_rounded,
+                                      size: 18,
+                                    ),
+                                    color: AppColors.g700,
+                                    tooltip: 'Imprimer la carte',
                                   ),
                                   PopupMenuButton<String>(
                                     tooltip: 'Changer le statut',
