@@ -139,6 +139,7 @@ router.patch('/me', async (req, res) => {
       telephone,
       adresse,
       notificationsEnabled,
+      photo,
       entite: entitePayload = {},
     } = req.body || {};
     if (typeof nom === 'string' && nom.trim()) user.nom = nom.trim();
@@ -147,6 +148,18 @@ router.patch('/me', async (req, res) => {
     if (typeof adresse === 'string') user.adresse = adresse.trim();
     if (typeof notificationsEnabled === 'boolean') {
       user.notificationsEnabled = notificationsEnabled;
+    }
+    if (user.role === 'patient' && user.patientId) {
+      const Patient = require('../models/Patient');
+      const patient = await Patient.findById(user.patientId);
+      if (patient) {
+        if (typeof nom === 'string' && nom.trim()) patient.nom = nom.trim();
+        if (typeof prenom === 'string' && prenom.trim()) patient.prenom = prenom.trim();
+        if (typeof telephone === 'string') patient.telephone = telephone.trim();
+        if (typeof adresse === 'string') patient.adresse = adresse.trim();
+        if (typeof photo === 'string') patient.photo = photo;
+        await patient.save();
+      }
     }
     await user.save();
 

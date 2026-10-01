@@ -143,6 +143,7 @@ class SanteDashboardShell extends ConsumerWidget {
   final String userRole;
   final Widget body;
   final Widget? headerAction;
+  final List<SanteDashboardNavItem>? mobileBottomItems;
 
   const SanteDashboardShell({
     super.key,
@@ -153,6 +154,7 @@ class SanteDashboardShell extends ConsumerWidget {
     required this.userRole,
     required this.body,
     this.headerAction,
+    this.mobileBottomItems,
   });
 
   Widget _buildSidebarContent(BuildContext context, WidgetRef ref) {
@@ -468,6 +470,27 @@ class SanteDashboardShell extends ConsumerWidget {
                       ),
                     ]
                   : null,
+            )
+          : null,
+      bottomNavigationBar: !isDesktop && mobileBottomItems != null
+          ? NavigationBar(
+              selectedIndex: mobileBottomItems!.indexWhere(
+                (item) => item.selected,
+              ).clamp(0, mobileBottomItems!.length - 1),
+              onDestinationSelected: (index) =>
+                  mobileBottomItems![index].onTap(),
+              backgroundColor: Colors.white,
+              indicatorColor: AppColors.g50,
+              height: 68,
+              destinations: mobileBottomItems!
+                  .map(
+                    (item) => NavigationDestination(
+                      icon: Icon(item.icon),
+                      selectedIcon: Icon(item.icon),
+                      label: item.label,
+                    ),
+                  )
+                  .toList(),
             )
           : null,
       body: SafeArea(

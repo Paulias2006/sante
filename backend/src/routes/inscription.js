@@ -35,6 +35,7 @@ router.post('/patient', async (req, res) => {
       adresse,
       groupeSanguin,
       allergies = [],
+      photo = '',
       cliniqueId,
     } = req.body || {};
     const normalizedEmail = email?.trim().toLowerCase();
@@ -86,6 +87,7 @@ router.post('/patient', async (req, res) => {
         adresse: adresse.trim(),
         groupeSanguin,
         allergies: Array.isArray(allergies) ? allergies : [],
+        photo: typeof photo === 'string' ? photo : '',
         createdBy: createdUser._id,
         clinique: clinique._id,
       }], { session });

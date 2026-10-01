@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,7 +23,8 @@ class PatientHomeScreen extends ConsumerStatefulWidget {
 
 class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   int _selectedTabIndex = 0;
-  int _dossierTabIndex = 2;
+  int _dossierTabIndex = 0;
+  int _patientSection = 0;
   bool _loading = true;
   bool _missingPatientLink = false;
   String? _loadError;
@@ -485,6 +488,82 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
+  void _openPatientSection(int section) {
+    setState(() {
+      _patientSection = section;
+      _selectedTabIndex = section == 0
+          ? 0
+          : section == 5
+          ? 4
+          : section == 6
+          ? 6
+          : section == 7
+          ? 7
+          : section == 8
+          ? 8
+          : section == 3
+          ? 2
+          : 1;
+    });
+  }
+
+  String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'ST';
+    return parts.take(2).map((part) => part[0]).join().toUpperCase();
+  }
+
+  Widget _patientAvatar({double size = 64, Color? background}) {
+    final encoded = _patient['photo']?.toString() ?? '';
+    ImageProvider<Object>? image;
+    if (encoded.isNotEmpty) {
+      try {
+        image = MemoryImage(base64Decode(encoded));
+      } catch (_) {
+        image = null;
+      }
+    }
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: background ?? AppColors.g700,
+      backgroundImage: image,
+      child: image == null
+          ? Text(
+              _initials(_userName),
+              style: GoogleFonts.syne(
+                fontSize: size * 0.29,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            )
+          : null,
+    );
+  }
+
+  String get _pageTitle {
+    if (_selectedTabIndex == 0) return 'Accueil';
+    if (_selectedTabIndex == 4) return 'Mon QR Code santé';
+    if (_selectedTabIndex == 6) return 'Notifications';
+    if (_selectedTabIndex == 7) return 'Paramètres';
+    if (_selectedTabIndex == 8) return 'Documents';
+    if (_selectedTabIndex == 2) return 'Ordonnances';
+    if (_selectedTabIndex == 3) return 'Analyses';
+    switch (_patientSection) {
+      case 2:
+        return 'Informations médicales';
+      case 3:
+        return 'Traitements en cours';
+      case 4:
+        return 'Historique médical';
+      default:
+        return 'Informations personnelles';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(authStateProvider).valueOrNull;
@@ -498,22 +577,28 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         onTap: () => setState(() => _selectedTabIndex = 0),
       ),
       SanteDashboardNavItem(
-        icon: Icons.folder_rounded,
-        label: 'Mon dossier',
-        selected: _selectedTabIndex == 1,
-        onTap: () => setState(() => _selectedTabIndex = 1),
+        icon: Icons.person_outline_rounded,
+        label: 'Informations personnelles',
+        selected: _selectedTabIndex == 1 && _patientSection == 1,
+        onTap: () => _openPatientSection(1),
       ),
       SanteDashboardNavItem(
-        icon: Icons.assignment_rounded,
-        label: 'Ordonnances',
-        selected: _selectedTabIndex == 2,
-        onTap: () => setState(() => _selectedTabIndex = 2),
+        icon: Icons.favorite_rounded,
+        label: 'Informations médicales',
+        selected: _patientSection == 2 && _selectedTabIndex == 1,
+        onTap: () => _openPatientSection(2),
       ),
       SanteDashboardNavItem(
-        icon: Icons.biotech_rounded,
-        label: 'Analyses',
-        selected: _selectedTabIndex == 3,
-        onTap: () => setState(() => _selectedTabIndex = 3),
+        icon: Icons.medication_rounded,
+        label: 'Traitements en cours',
+        selected: _patientSection == 3 && _selectedTabIndex == 2,
+        onTap: () => _openPatientSection(3),
+      ),
+      SanteDashboardNavItem(
+        icon: Icons.history_rounded,
+        label: 'Historique médical',
+        selected: _patientSection == 4 && _selectedTabIndex == 1,
+        onTap: () => _openPatientSection(4),
       ),
       SanteDashboardNavItem(
         icon: Icons.qr_code_rounded,
@@ -529,19 +614,53 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       ),
       SanteDashboardNavItem(
         icon: Icons.notifications_active_rounded,
-        label: 'Rappels',
+        label: 'Notifications',
         selected: _selectedTabIndex == 6,
         onTap: () async {
           await NotificationService.instance.requestPermission();
-          if (mounted) setState(() => _selectedTabIndex = 6);
+          if (mounted) _openPatientSection(6);
         },
+      ),
+      SanteDashboardNavItem(
+        icon: Icons.settings_rounded,
+        label: 'Paramètres',
+        selected: _selectedTabIndex == 7,
+        onTap: () => _openPatientSection(7),
+      ),
+    ];
+
+    final mobileBottomItems = [
+      SanteDashboardNavItem(
+        icon: Icons.home_rounded,
+        label: 'Accueil',
+        selected: _selectedTabIndex == 0,
+        onTap: () => _openPatientSection(0),
+      ),
+      SanteDashboardNavItem(
+        icon: Icons.favorite_rounded,
+        label: 'Santé',
+        selected: _selectedTabIndex == 1,
+        onTap: () => _openPatientSection(2),
+      ),
+      SanteDashboardNavItem(
+        icon: Icons.folder_rounded,
+        label: 'Documents',
+        selected: _selectedTabIndex == 2 || _selectedTabIndex == 3 || _selectedTabIndex == 4 || _selectedTabIndex == 8,
+        onTap: () => _openPatientSection(8),
+      ),
+      SanteDashboardNavItem(
+        icon: Icons.person_rounded,
+        label: 'Profil',
+        selected: _selectedTabIndex == 7,
+        onTap: () => _openPatientSection(7),
       ),
     ];
 
     return SanteDashboardShell(
-      title: 'Accueil',
+      title: _pageTitle,
       subtitle: '— dossier patient',
       navItems: navItems,
+      mobileBottomItems: mobileBottomItems,
       userName: userName,
       userRole: currentUser?.role.toLowerCase() == 'patient'
           ? 'Patient'
@@ -595,7 +714,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       case 0:
         return _buildHome(userName);
       case 1:
-        return _buildDossier(userName);
+        return _buildPatientSection(userName);
       case 2:
         return _buildOrdonnances();
       case 3:
@@ -605,7 +724,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       case 5:
         return _buildPharmacyHistory();
       case 6:
-        return _buildReminders();
+        return _buildNotifications();
+      case 7:
+        return _buildSettings();
+      case 8:
+        return _buildDocuments();
       default:
         return _buildHome(userName);
     }
@@ -643,24 +766,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 62,
-                  height: 62,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Center(
-                    child: Text(
-                      userName.substring(0, 2).toUpperCase(),
-                      style: GoogleFonts.syne(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+                _patientAvatar(size: 62, background: Colors.white24),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -708,6 +814,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   icon: Icons.warning_amber_rounded,
                   tint: AppColors.dangerBg,
                   value: bloodGroup,
+                  onTap: () => _openPatientSection(2),
                 ),
               ),
               const SizedBox(width: 12),
@@ -718,6 +825,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   icon: Icons.qr_code_rounded,
                   tint: AppColors.g50,
                   value: dossierNumber,
+                  onTap: () => _openPatientSection(5),
                 ),
               ),
             ],
@@ -727,33 +835,33 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             crossAxisCount: compact ? 2 : 4,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: compact ? 1.35 : 1,
+            childAspectRatio: compact ? 1.18 : 1.25,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             children: [
-              _MetricCard(
-                label: 'Ordonnances',
-                value: '${_ordonnances.length}',
-                icon: Icons.assignment_rounded,
+              _PatientQuickCard(
+                label: 'Mes informations',
+                icon: Icons.assignment_ind_rounded,
                 tint: AppColors.g100,
+                onTap: () => _openPatientSection(1),
               ),
-              _MetricCard(
-                label: 'Historique',
-                value: '${_consultations.length}',
-                icon: Icons.folder_rounded,
+              _PatientQuickCard(
+                label: 'Mes antécédents',
+                icon: Icons.folder_special_rounded,
                 tint: AppColors.blueBg,
+                onTap: () => _openPatientSection(2),
               ),
-              _MetricCard(
-                label: 'Analyses',
-                value: '${_analyses.length}',
-                icon: Icons.biotech_rounded,
+              _PatientQuickCard(
+                label: 'Traitements',
+                icon: Icons.medication_rounded,
                 tint: AppColors.warningBg,
+                onTap: () => _openPatientSection(3),
               ),
-              _MetricCard(
-                label: 'Rappels',
-                value: '${activeOrdonnances.length}',
-                icon: Icons.notifications_rounded,
+              _PatientQuickCard(
+                label: 'Paramètres',
+                icon: Icons.settings_rounded,
                 tint: AppColors.g50,
+                onTap: () => _openPatientSection(7),
               ),
             ],
           ),
@@ -803,6 +911,619 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildPatientSection(String userName) {
+    switch (_patientSection) {
+      case 1:
+        return _buildPersonalInformation(userName);
+      case 2:
+        return _buildMedicalInformation();
+      case 3:
+        return _buildTreatmentOverview();
+      case 4:
+        return _buildMedicalHistory();
+      default:
+        return _buildDossier(userName);
+    }
+  }
+
+  Widget _patientPage(String title, Widget child) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.syne(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.s800,
+                ),
+              ),
+              const SizedBox(height: 16),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _patientPanel({required Widget child, Color color = Colors.white}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.s100),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _patientDataRow(String label, String value, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.s100)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 17, color: AppColors.g700),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.s700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            flex: 2,
+            child: Text(
+              value.isEmpty ? 'Non renseigné' : value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonalInformation(String userName) {
+    final birthDate = _formattedDate(_patient['dateNaissance']);
+    return _patientPage(
+      'Informations personnelles',
+      Column(
+        children: [
+          _patientPanel(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    _patientAvatar(size: 66, background: AppColors.g100),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            userName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.syne(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.s800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Dossier ${_patient['dossierNumber'] ?? '—'}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppColors.s500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _editPatientProfile,
+                      tooltip: 'Modifier mes informations',
+                      icon: const Icon(Icons.edit_rounded),
+                      color: AppColors.g700,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _patientDataRow('Date de naissance', birthDate),
+                _patientDataRow('Sexe', _sexLabel(_patient['sexe'])),
+                _patientDataRow(
+                  'Groupe sanguin',
+                  _patient['groupeSanguin']?.toString() ?? '—',
+                  icon: Icons.bloodtype_rounded,
+                ),
+                _patientDataRow(
+                  'Téléphone',
+                  _patient['telephone']?.toString() ?? '',
+                  icon: Icons.phone_rounded,
+                ),
+                _patientDataRow(
+                  'Adresse',
+                  _patient['adresse']?.toString() ?? '',
+                  icon: Icons.place_rounded,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _editPatientProfile,
+            icon: const Icon(Icons.edit_rounded, size: 17),
+            label: const Text('Modifier mes informations'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMedicalInformation() {
+    final allergies = ((_patient['allergies'] as List?) ?? [])
+        .map((item) => item.toString())
+        .where((item) => item.trim().isNotEmpty)
+        .toList();
+    final antecedents = ((_patient['antecedents'] as List?) ?? [])
+        .map((item) => item.toString())
+        .where((item) => item.trim().isNotEmpty)
+        .toList();
+    return _patientPage(
+      'Informations médicales',
+      Column(
+        children: [
+          _patientPanel(
+            color: AppColors.g50,
+            child: Row(
+              children: [
+                const Icon(Icons.bloodtype_rounded, color: AppColors.g700, size: 30),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _labelValue(
+                    'Groupe sanguin',
+                    _patient['groupeSanguin']?.toString() ?? 'Non renseigné',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _patientPanel(
+            color: AppColors.dangerBg,
+            child: _medicalListPanel(
+              title: 'Allergies',
+              items: allergies,
+              empty: 'Aucune allergie connue',
+              icon: Icons.warning_rounded,
+              tone: AppColors.danger,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _patientPanel(
+            color: AppColors.blueBg,
+            child: _medicalListPanel(
+              title: 'Maladies / antécédents',
+              items: antecedents,
+              empty: 'Aucun antécédent enregistré dans ce dossier.',
+              icon: Icons.health_and_safety_rounded,
+              tone: AppColors.blue,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _patientPanel(
+            child: _labelValue(
+              'Informations supplémentaires',
+              _patient['notesMedicales']?.toString() ??
+                  'Aucune information supplémentaire.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _labelValue(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: AppColors.s800,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(value, style: GoogleFonts.inter(fontSize: 13, color: AppColors.s600)),
+      ],
+    );
+  }
+
+  Widget _medicalListPanel({
+    required String title,
+    required List<String> items,
+    required String empty,
+    required IconData icon,
+    required Color tone,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: tone, size: 22),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: tone)),
+              const SizedBox(height: 8),
+              if (items.isEmpty)
+                Text(empty, style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600))
+              else
+                ...items.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Text('• $item', style: GoogleFonts.inter(fontSize: 12, color: AppColors.s700)),
+                    )),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTreatmentOverview() {
+    final medicines = _activePrescriptionMedicines();
+    if (medicines.isEmpty) {
+      return _patientPage(
+        'Traitements en cours',
+        _emptyState('Aucun traitement actif dans les ordonnances reçues.'),
+      );
+    }
+    return _patientPage(
+      'Traitements en cours',
+      Column(
+        children: medicines
+            .map(
+              (medicine) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _PrescriptionRow(
+                  name: medicine['nom']?.toString() ?? 'Médicament',
+                  posologie: medicine['dose']?.toString() ?? '—',
+                  interval: medicine['frequence']?.toString() ?? '—',
+                  duration: medicine['duree']?.toString() ?? '—',
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildMedicalHistory() {
+    final entries = <Widget>[];
+    for (final item in _filteredConsultations) {
+      entries.add(_historyEntry(
+        date: _formattedDate(item['date'] ?? item['createdAt']),
+        title: item['motif']?.toString() ?? 'Consultation',
+        detail: item['diagnostic']?.toString() ?? 'Diagnostic non renseigné',
+        icon: Icons.medical_services_rounded,
+      ));
+    }
+    for (final item in _filteredAnalyses) {
+      entries.add(_historyEntry(
+        date: _formattedDate(item['date'] ?? item['createdAt']),
+        title: item['type']?.toString() ?? 'Analyse',
+        detail: 'Résultats enregistrés dans le dossier',
+        icon: Icons.biotech_rounded,
+      ));
+    }
+    for (final item in _filteredDelivrances) {
+      entries.add(_historyEntry(
+        date: _formattedDate(item['date'] ?? item['createdAt']),
+        title: 'Délivrance en pharmacie',
+        detail: _pharmacyName(item['pharmacie']),
+        icon: Icons.local_pharmacy_rounded,
+      ));
+    }
+    if (entries.isEmpty) {
+      return _patientPage('Historique médical', _emptyState('Aucun événement médical enregistré.'));
+    }
+    return _patientPage(
+      'Historique médical',
+      Column(children: entries),
+    );
+  }
+
+  Widget _historyEntry({required String date, required String title, required String detail, required IconData icon}) {
+    return _patientPanel(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: AppColors.g50, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: AppColors.g700, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(date, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
+                const SizedBox(height: 4),
+                Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.s800)),
+                const SizedBox(height: 4),
+                Text(detail, style: GoogleFonts.inter(fontSize: 12, color: AppColors.s600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotifications() {
+    final medicines = _activePrescriptionMedicines();
+    if (medicines.isEmpty) {
+      return _patientPage(
+        'Notifications',
+        _emptyState('Aucune notification médicale à afficher.'),
+      );
+    }
+    return _patientPage(
+      'Notifications',
+      Column(
+        children: medicines
+            .map(
+              (medicine) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _patientPanel(
+                  color: AppColors.dangerBg,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.notifications_active_rounded, color: AppColors.danger),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _labelValue(
+                          'Rappel de traitement',
+                          '${medicine['nom'] ?? 'Médicament'} · ${medicine['frequence'] ?? 'Selon ordonnance'}',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildDocuments() {
+    return _patientPage(
+      'Documents',
+      Column(
+        children: [
+          _documentAction(
+            icon: Icons.history_rounded,
+            title: 'Historique médical',
+            subtitle: '${_consultations.length + _analyses.length + _delivrances.length} événement(s) enregistré(s)',
+            onTap: () => _openPatientSection(4),
+          ),
+          _documentAction(
+            icon: Icons.receipt_long_rounded,
+            title: 'Ordonnances',
+            subtitle: '${_ordonnances.length} ordonnance(s) dans le dossier',
+            onTap: () => setState(() => _selectedTabIndex = 2),
+          ),
+          _documentAction(
+            icon: Icons.biotech_rounded,
+            title: 'Analyses',
+            subtitle: '${_analyses.length} analyse(s) enregistrée(s)',
+            onTap: () => setState(() => _selectedTabIndex = 3),
+          ),
+          _documentAction(
+            icon: Icons.qr_code_rounded,
+            title: 'Mon QR Code santé',
+            subtitle: 'Accès sécurisé au dossier patient',
+            onTap: () => _openPatientSection(5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _documentAction({required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _patientPanel(
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(color: AppColors.g50, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: AppColors.g700),
+          ),
+          title: Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.s800)),
+          subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
+          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.s400),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettings() {
+    final currentUser = ref.watch(authStateProvider).valueOrNull;
+    final notificationsEnabled = currentUser?.notificationsEnabled ?? true;
+    return _patientPage(
+      'Paramètres',
+      Column(
+        children: [
+          _patientPanel(
+            child: Column(
+              children: [
+                _settingsAction(
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Sécurité',
+                  subtitle: 'Session protégée par votre compte',
+                ),
+                _settingsAction(
+                  icon: Icons.notifications_none_rounded,
+                  title: 'Notifications',
+                  subtitle: 'Rappels liés aux traitements actifs',
+                  trailing: Switch(
+                    value: notificationsEnabled,
+                    activeThumbColor: AppColors.g700,
+                    onChanged: (value) async {
+                      try {
+                        await ref.read(apiServiceProvider).updateMyProfile({
+                          'notificationsEnabled': value,
+                        });
+                        await ref.read(authStateProvider.notifier).refreshUser();
+                        if (!mounted) return;
+                        setState(() {});
+                      } catch (error) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                        );
+                      }
+                    },
+                  ),
+                ),
+                _settingsAction(
+                  icon: Icons.share_rounded,
+                  title: 'Partage de données',
+                  subtitle: 'Le partage se fait uniquement via un QR valide',
+                ),
+                _settingsAction(
+                  icon: Icons.shield_outlined,
+                  title: 'Confidentialité',
+                  subtitle: 'Accès professionnel journalisé dans le dossier',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _patientPanel(
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.edit_rounded, color: AppColors.g700),
+                  title: const Text('Modifier mes informations'),
+                  subtitle: const Text('Nom, téléphone, adresse et photo'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _editPatientProfile,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.info_outline_rounded, color: AppColors.g700),
+                  title: const Text('Version de l’application'),
+                  trailing: const Text('1.0.0'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsAction({required IconData icon, required String title, required String subtitle, Widget? trailing}) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: AppColors.g700),
+      title: Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.s800)),
+      subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
+      trailing: trailing ?? const Icon(Icons.chevron_right_rounded, color: AppColors.s400),
+    );
+  }
+
+  Future<void> _editPatientProfile() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final firstName = TextEditingController(text: _patient['prenom']?.toString() ?? user.prenom);
+    final lastName = TextEditingController(text: _patient['nom']?.toString() ?? user.nom);
+    final phone = TextEditingController(text: _patient['telephone']?.toString() ?? user.telephone);
+    final address = TextEditingController(text: _patient['adresse']?.toString() ?? user.adresse);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Modifier mes informations'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: firstName, decoration: const InputDecoration(labelText: 'Prénom')),
+              TextField(controller: lastName, decoration: const InputDecoration(labelText: 'Nom')),
+              TextField(controller: phone, decoration: const InputDecoration(labelText: 'Téléphone')),
+              TextField(controller: address, decoration: const InputDecoration(labelText: 'Adresse')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) {
+      firstName.dispose();
+      lastName.dispose();
+      phone.dispose();
+      address.dispose();
+      return;
+    }
+    try {
+      await ref.read(apiServiceProvider).updateMyProfile({
+        'prenom': firstName.text.trim(),
+        'nom': lastName.text.trim(),
+        'telephone': phone.text.trim(),
+        'adresse': address.text.trim(),
+      });
+      await ref.read(authStateProvider.notifier).refreshUser();
+      await _loadPatientData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informations mises à jour.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    } finally {
+      firstName.dispose();
+      lastName.dispose();
+      phone.dispose();
+      address.dispose();
+    }
   }
 
   Widget _buildDossier(String userName) {
@@ -1786,106 +2507,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _buildReminders() {
-    final activeOrdonnances = _ordonnances.where(_isOrdonnanceActive).toList();
-    if (activeOrdonnances.isEmpty) {
-      return _emptyState(
-        'Aucun rappel actif. Les rappels se créent depuis les ordonnances actives.',
-      );
-    }
-
-    final reminders = <Map<String, String>>[];
-    for (final ordonnance in activeOrdonnances) {
-      for (final med in (ordonnance['medicaments'] as List? ?? const [])) {
-        reminders.add({
-          'name': (med['nom'] ?? 'Médicament').toString(),
-          'dose': (med['dose'] ?? '').toString(),
-          'time': (med['frequence'] ?? 'Selon ordonnance').toString(),
-          'duration': (med['duree'] ?? '').toString(),
-        });
-      }
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Rappels de prise',
-            style: GoogleFonts.syne(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: AppColors.s800,
-            ),
-          ),
-          const SizedBox(height: 20),
-          for (final reminder in reminders)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.s100),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.g50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.notifications_active_rounded,
-                      color: AppColors.g700,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          reminder['name']!,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.s800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${reminder['dose']} · ${reminder['time']} · ${reminder['duration']}',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppColors.s500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: true,
-                    onChanged: (_) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Rappel mis à jour en local.'),
-                        ),
-                      );
-                    },
-                    activeThumbColor: AppColors.g700,
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _DossierInfoPill extends StatelessWidget {
@@ -2045,6 +2666,7 @@ class _InfoCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color tint;
+  final VoidCallback? onTap;
 
   const _InfoCard({
     required this.title,
@@ -2052,11 +2674,15 @@ class _InfoCard extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.tint,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -2100,26 +2726,30 @@ class _InfoCard extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 }
 
-class _MetricCard extends StatelessWidget {
+class _PatientQuickCard extends StatelessWidget {
   final String label;
-  final String value;
   final IconData icon;
   final Color tint;
+  final VoidCallback? onTap;
 
-  const _MetricCard({
+  const _PatientQuickCard({
     required this.label,
-    required this.value,
     required this.icon,
     required this.tint,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -2139,20 +2769,23 @@ class _MetricCard extends StatelessWidget {
             child: Icon(icon, size: 16, color: AppColors.g700),
           ),
           const SizedBox(height: 12),
-          Text(
-            value,
-            style: GoogleFonts.syne(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: AppColors.s800,
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.s800,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.inter(fontSize: 10, color: AppColors.s500),
-          ),
         ],
+      ),
       ),
     );
   }

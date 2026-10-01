@@ -750,7 +750,6 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
     final entite = _profile['entite'] is Map
         ? Map<String, dynamic>.from(_profile['entite'])
         : <String, dynamic>{};
-
     _settingsUserNomController.text = currentUser?.nom ?? '';
     _settingsUserPrenomController.text = currentUser?.prenom ?? '';
     _settingsNameController.text = entite['nom']?.toString() ?? '';
@@ -1264,22 +1263,10 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       },
     ];
 
-    final doctors = [
-      {
-        'name': 'Equipe clinique',
-        'specialty': 'Suivi général',
-        'patients': '$totalPatients dossiers',
-        'active': true,
-        'color': AppColors.g700,
-      },
-      {
-        'name': 'Service de consultation',
-        'specialty': 'Contrôle et urgence',
-        'patients': '$pendingCount à revoir',
-        'active': true,
-        'color': AppColors.g500,
-      },
-    ];
+    final entite = _profile['entite'] is Map
+        ? Map<String, dynamic>.from(_profile['entite'])
+        : <String, dynamic>{};
+    const doctors = <Map<String, dynamic>>[];
 
     final compact = _isCompact(context);
 
@@ -1700,12 +1687,30 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'MÉDECINS ACTIFS',
+                                    'SERVICE CONNECTÉ',
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                       color: AppColors.g700,
                                       letterSpacing: 0,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    entite['nom']?.toString() ??
+                                        'Structure médicale',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.g800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${entite['ville'] ?? ''} · $totalPatients dossier(s) chargé(s)',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppColors.g600,
                                     ),
                                   ),
                                   const SizedBox(height: 12),

@@ -25,6 +25,7 @@ const patientSchema = new mongoose.Schema(
       required: true,
     },
     allergies: [{ type: String, trim: true }],
+    photo: { type: String, default: '' },
     carteStatus: {
       type: String,
       enum: ['pending', 'printed', 'delivered'],

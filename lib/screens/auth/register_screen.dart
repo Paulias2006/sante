@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +9,7 @@ import 'package:sante/widgets/common_widgets.dart';
 import 'package:sante/widgets/sante_shell.dart';
 import 'package:sante/screens/auth/login_screen.dart';
 import 'package:sante/services/api_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -41,6 +44,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   List<Map<String, dynamic>> _approvedClinics = [];
   bool _loadingClinics = false;
   bool _isSubmitting = false;
+  String _patientPhoto = '';
 
   @override
   void dispose() {
@@ -115,6 +119,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               .map((value) => value.trim())
               .where((value) => value.isNotEmpty)
               .toList(),
+          'photo': _patientPhoto,
           'cliniqueId': _selectedClinicId,
         };
         final result = await api.registerPatient(payload);
@@ -528,6 +533,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _patientAllergiesController,
           'Allergies séparées par des virgules',
         ),
+        const SizedBox(height: 12),
+        _buildPatientPhotoPicker(),
         const SizedBox(height: 18),
         SizedBox(
           width: double.infinity,
@@ -539,6 +546,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildPatientPhotoPicker() {
+    final hasPhoto = _patientPhoto.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.g50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.s100),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: AppColors.g700,
+            backgroundImage: hasPhoto
+                ? MemoryImage(base64Decode(_patientPhoto))
+                : null,
+            child: hasPhoto
+                ? null
+                : const Icon(Icons.person_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Photo de profil (facultative)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.s800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Elle pourra être ajoutée ou modifiée plus tard.',
+                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: _pickPatientPhoto,
+            tooltip: 'Choisir une photo',
+            icon: const Icon(Icons.photo_camera_rounded, color: AppColors.g700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickPatientPhoto() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 78,
+      maxWidth: 720,
+    );
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    setState(() => _patientPhoto = base64Encode(bytes));
   }
 
   Widget _buildResponsivePair(Widget first, Widget second) {
