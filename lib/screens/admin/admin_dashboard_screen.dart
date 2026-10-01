@@ -40,6 +40,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   String _cardSearchQuery = '';
   String _cardStatusFilter = 'Toutes';
   final bool _legacyCardTableEnabled = false;
+  String _entitySearchQuery = '';
 
   @override
   void initState() {
@@ -1817,6 +1818,24 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     required List<Widget> Function(Map<String, dynamic> item) itemBuilder,
     List<Widget> Function(Map<String, dynamic> item)? actionsBuilder,
   }) {
+    final query = _entitySearchQuery.trim().toLowerCase();
+    final visibleData = query.isEmpty
+        ? data
+        : data.where((item) {
+            final searchable = [
+              item['nom'],
+              item['prenom'],
+              item['responsable'],
+              item['email'],
+              item['dossierNumber'],
+              item['telephone'],
+              item['ville'],
+              item['adresse'],
+              item['numeroAutorisation'],
+            ].whereType<Object>().join(' ').toLowerCase();
+            return searchable.contains(query);
+          }).toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -1851,79 +1870,119 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             )
           else
             _Panel(
-              title: '$title · ${data.length}',
+              title: '$title · ${visibleData.length}',
               child: Column(
-                children: data.map((item) {
-                  final status = (item['status'] ?? '').toString();
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.s100),
+                children: [
+                  TextField(
+                    onChanged: (value) =>
+                        setState(() => _entitySearchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher dans $title',
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: AppColors.g600,
+                      ),
+                      suffixIcon: _entitySearchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Effacer la recherche',
+                              onPressed: () =>
+                                  setState(() => _entitySearchQuery = ''),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                      filled: true,
+                      fillColor: AppColors.g50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: AppColors.g50,
-                                borderRadius: BorderRadius.circular(12),
+                  ),
+                  const SizedBox(height: 12),
+                  if (visibleData.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Text(
+                        'Aucun résultat pour cette recherche.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.s500,
+                        ),
+                      ),
+                    ),
+                  ...visibleData.map((item) {
+                    final status = (item['status'] ?? '').toString();
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.s100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.g50,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  title == 'Pharmacies'
+                                      ? Icons.local_pharmacy_rounded
+                                      : title == 'Patients'
+                                      ? Icons.person_rounded
+                                      : title == 'Cartes PVC'
+                                      ? Icons.credit_card_rounded
+                                      : title == 'Journaux'
+                                      ? Icons.history_rounded
+                                      : Icons.local_hospital_rounded,
+                                  size: 18,
+                                  color: AppColors.g700,
+                                ),
                               ),
-                              child: Icon(
-                                title == 'Pharmacies'
-                                    ? Icons.local_pharmacy_rounded
-                                    : title == 'Patients'
-                                    ? Icons.person_rounded
-                                    : title == 'Cartes PVC'
-                                    ? Icons.credit_card_rounded
-                                    : title == 'Journaux'
-                                    ? Icons.history_rounded
-                                    : Icons.local_hospital_rounded,
-                                size: 18,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: itemBuilder(item),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (status.isNotEmpty) _buildStatusChip(status),
+                              if (actionsBuilder != null)
+                                ...actionsBuilder(item),
+                              IconButton(
+                                onPressed: () => _showInfoDialog(title, item),
+                                icon: const Icon(
+                                  Icons.visibility_rounded,
+                                  size: 18,
+                                ),
                                 color: AppColors.g700,
+                                tooltip: 'Voir les détails',
+                                visualDensity: VisualDensity.compact,
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: itemBuilder(item),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (status.isNotEmpty) _buildStatusChip(status),
-                            if (actionsBuilder != null) ...actionsBuilder(item),
-                            IconButton(
-                              onPressed: () => _showInfoDialog(title, item),
-                              icon: const Icon(
-                                Icons.visibility_rounded,
-                                size: 18,
-                              ),
-                              color: AppColors.g700,
-                              tooltip: 'Voir les détails',
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
         ],
