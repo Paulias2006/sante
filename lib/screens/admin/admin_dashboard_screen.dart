@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -36,6 +37,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   List<Map<String, dynamic>> _patients = [];
   List<Map<String, dynamic>> _cartes = [];
   List<Map<String, dynamic>> _logs = [];
+  String _cardSearchQuery = '';
+  String _cardStatusFilter = 'Toutes';
+  final bool _legacyCardTableEnabled = false;
 
   @override
   void initState() {
@@ -198,58 +202,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   }
 
   void _showInfoDialog(String title, Map<String, dynamic> item) {
-    final info = item.map((key, value) => MapEntry(key, value ?? '—'));
-    final rows = info.entries
-        .map(
-          (entry) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: Text(
-                    entry.key,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.s500,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    entry.value.toString(),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.s800,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        )
-        .toList();
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(
-          title,
-          style: GoogleFonts.syne(fontWeight: FontWeight.w800),
-        ),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(child: Column(children: rows)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Fermer'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _AdminDetailPage(title: title, item: item),
       ),
     );
   }
@@ -417,81 +372,334 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         : await QrPainter(
             data: qrToken,
             version: QrVersions.auto,
-          ).toImageData(320);
-    final document = pw.Document();
-    document.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (_) => pw.Center(
-          child: pw.Container(
-            width: 340,
-            height: 220,
-            padding: const pw.EdgeInsets.all(20),
-            decoration: pw.BoxDecoration(
-              color: PdfColor.fromHex('#0A6B55'),
-              borderRadius: pw.BorderRadius.circular(14),
+          ).toImageData(520);
+    final logoData = await rootBundle.load('assets/logo_sante.png');
+    final logo = pw.MemoryImage(logoData.buffer.asUint8List());
+    final qrImage = qrData == null
+        ? null
+        : pw.MemoryImage(qrData.buffer.asUint8List());
+    final fullName = '${patient['prenom'] ?? ''} ${patient['nom'] ?? ''}'
+        .trim();
+    final dossier = patient['dossierNumber']?.toString() ?? '—';
+    final group = patient['groupeSanguin']?.toString() ?? '—';
+    final allergies = (patient['allergies'] as List? ?? const [])
+        .map((item) => item.toString())
+        .where((item) => item.trim().isNotEmpty)
+        .join(', ');
+    final cardWidth = 243.0;
+    final cardHeight = 153.0;
+
+    pw.Widget cardFront() => pw.Container(
+      width: cardWidth,
+      height: cardHeight,
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#0A6B55'),
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Image(logo, width: 105, height: 39, fit: pw.BoxFit.contain),
+          pw.Spacer(),
+          pw.Text(
+            fullName.isEmpty ? 'Patient SantéTogo' : fullName,
+            maxLines: 1,
+            style: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
             ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Dossier $dossier  ·  Groupe $group',
+            style: const pw.TextStyle(color: PdfColors.white, fontSize: 8),
+          ),
+        ],
+      ),
+    );
+
+    pw.Widget cardBack() => pw.Container(
+      width: cardWidth,
+      height: cardHeight,
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#F3F7F5'),
+        borderRadius: pw.BorderRadius.circular(10),
+        border: pw.Border.all(color: PdfColor.fromHex('#D8E8E2')),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          if (qrImage != null)
+            pw.Container(
+              width: 86,
+              height: 86,
+              padding: const pw.EdgeInsets.all(5),
+              color: PdfColors.white,
+              child: pw.Image(qrImage, fit: pw.BoxFit.contain),
+            ),
+          pw.SizedBox(width: 12),
+          pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
+              mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Text(
-                  'SanteTogo',
+                  'INFORMATIONS D’URGENCE',
                   style: pw.TextStyle(
-                    color: PdfColors.white,
-                    fontSize: 22,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 4),
-                pw.Text(
-                  'DOSSIER MEDICAL NUMERIQUE',
-                  style: const pw.TextStyle(
-                    color: PdfColors.white,
+                    color: PdfColor.fromHex('#0A6B55'),
                     fontSize: 8,
-                  ),
-                ),
-                pw.Spacer(),
-                pw.Text(
-                  '${patient['prenom'] ?? ''} ${patient['nom'] ?? ''}'.trim(),
-                  style: pw.TextStyle(
-                    color: PdfColors.white,
-                    fontSize: 18,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
                 pw.SizedBox(height: 6),
                 pw.Text(
-                  'Dossier ${patient['dossierNumber'] ?? '—'}  ·  Groupe ${patient['groupeSanguin'] ?? '—'}',
-                  style: const pw.TextStyle(
-                    color: PdfColors.white,
-                    fontSize: 10,
-                  ),
+                  'Groupe : $group',
+                  style: const pw.TextStyle(fontSize: 8),
                 ),
-                if (qrData != null) ...[
-                  pw.SizedBox(height: 10),
-                  pw.Align(
-                    alignment: pw.Alignment.bottomRight,
-                    child: pw.Container(
-                      width: 58,
-                      height: 58,
-                      color: PdfColors.white,
-                      padding: const pw.EdgeInsets.all(4),
-                      child: pw.Image(
-                        pw.MemoryImage(qrData.buffer.asUint8List()),
-                      ),
-                    ),
-                  ),
-                ],
+                pw.Text(
+                  'Allergies : ${allergies.isEmpty ? 'Aucune connue' : allergies}',
+                  maxLines: 3,
+                  style: const pw.TextStyle(fontSize: 7),
+                ),
+                pw.SizedBox(height: 6),
+                pw.Text(
+                  'Présenter cette carte à un professionnel de santé.',
+                  style: const pw.TextStyle(fontSize: 7),
+                ),
               ],
             ),
           ),
-        ),
+        ],
+      ),
+    );
+
+    final document = pw.Document();
+    document.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (_) => pw.Center(child: cardFront()),
+      ),
+    );
+    document.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (_) => pw.Center(child: cardBack()),
       ),
     );
     await Printing.layoutPdf(onLayout: (_) async => document.save());
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Carte envoyée à l’impression.')),
+    );
+  }
+
+  Widget _buildCardOrdersPanel() {
+    final query = _cardSearchQuery.trim().toLowerCase();
+    final cards = _cartes.where((item) {
+      final clinic = _clinicName(item).toLowerCase();
+      final status = (item['status'] ?? 'pending').toString();
+      final matchesQuery = query.isEmpty || clinic.contains(query);
+      final matchesStatus =
+          _cardStatusFilter == 'Toutes' ||
+          _formatStatus(status) == _cardStatusFilter;
+      return matchesQuery && matchesStatus;
+    }).toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppColors.s100),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) => Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.credit_card_rounded,
+                      size: 18,
+                      color: AppColors.g700,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Commandes de cartes',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.g800,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(
+                  width: constraints.maxWidth > 280
+                      ? 230
+                      : constraints.maxWidth,
+                  child: TextField(
+                    onChanged: (value) =>
+                        setState(() => _cardSearchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher une clinique',
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.g50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        size: 16,
+                        color: AppColors.g600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                ['Toutes', 'En attente', 'Impression', 'Expédiée', 'Livrée']
+                    .map(
+                      (value) => ChoiceChip(
+                        label: Text(value),
+                        selected: _cardStatusFilter == value,
+                        onSelected: (_) =>
+                            setState(() => _cardStatusFilter = value),
+                        selectedColor: AppColors.g700,
+                        labelStyle: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _cardStatusFilter == value
+                              ? Colors.white
+                              : AppColors.g700,
+                        ),
+                      ),
+                    )
+                    .toList(),
+          ),
+          const SizedBox(height: 8),
+          if (cards.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'Aucune commande de carte ne correspond à ce filtre.',
+                style: GoogleFonts.inter(fontSize: 12, color: AppColors.g600),
+              ),
+            )
+          else
+            ...cards.map(_buildCardOrderTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardOrderTile(Map<String, dynamic> item) {
+    final clinicName = _clinicName(item);
+    final count = _cardCount(item);
+    final date = _displayDate(item['createdAt'] ?? item['date']);
+    final status = (item['status'] ?? 'pending').toString();
+    final patient = _patientFromCard(item);
+    final patientName = patient == null
+        ? 'Patient non renseigné'
+        : _patientFullName(patient);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.g50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.s100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  clinicName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.g800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildStatusChip(status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            patientName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(fontSize: 12, color: AppColors.g700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$count carte(s) · Commandée le $date',
+            style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _showInfoDialog('Commande de carte', item),
+                icon: const Icon(Icons.visibility_rounded, size: 16),
+                label: const Text('Détails'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _printCard(item),
+                icon: const Icon(Icons.print_rounded, size: 16),
+                label: const Text('Imprimer'),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Changer le statut',
+                onSelected: (value) => _updateCardStatus(item, value),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'pending', child: Text('En attente')),
+                  PopupMenuItem(value: 'printing', child: Text('Impression')),
+                  PopupMenuItem(value: 'shipped', child: Text('Expédiée')),
+                  PopupMenuItem(value: 'delivered', child: Text('Livrée')),
+                ],
+                child: const Icon(
+                  Icons.more_horiz_rounded,
+                  color: AppColors.g700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -810,50 +1018,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               const SizedBox(height: 20),
               _buildDashboardStats(),
               const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: AppColors.s100),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time_rounded,
-                          size: 18,
-                          color: AppColors.g700,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Cliniques en attente de vérification',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.g800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      '— ${pendingClinics.length} dossiers',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.g600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildCardOrdersPanel(),
+              const SizedBox(height: 12),
               const SizedBox(height: 12),
               if (pendingClinics.isEmpty)
                 Container(
@@ -1033,276 +1199,279 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 );
               }),
               const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: AppColors.s100),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.credit_card_rounded,
-                              size: 18,
-                              color: AppColors.g700,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Commandes de cartes récentes',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g800,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(
-                          width: 230,
-                          child: TextField(
-                            decoration: InputDecoration(
-                              hintText: 'Rechercher clinique...',
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              filled: true,
-                              fillColor: AppColors.g50,
-                              hintStyle: GoogleFonts.inter(
-                                color: AppColors.g600,
-                                fontSize: 12,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
-                              ),
-                              prefixIcon: const Icon(
-                                Icons.search_rounded,
-                                size: 16,
-                                color: AppColors.g600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.g50,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
+              if (_legacyCardTableEnabled)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: AppColors.s100),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Expanded(
-                            child: Text(
-                              'CLINIQUE',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.credit_card_rounded,
+                                size: 18,
                                 color: AppColors.g700,
                               ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              'NB CARTES',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g700,
+                              const SizedBox(width: 8),
+                              Text(
+                                'Commandes de cartes récentes',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g800,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          Expanded(
-                            child: Text(
-                              'DATE',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g700,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              'STATUT',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g700,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              'ACTION',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.g700,
+                          SizedBox(
+                            width: 230,
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Rechercher clinique...',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                filled: true,
+                                fillColor: AppColors.g50,
+                                hintStyle: GoogleFonts.inter(
+                                  color: AppColors.g600,
+                                  fontSize: 12,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide.none,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.search_rounded,
+                                  size: 16,
+                                  color: AppColors.g600,
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (recentCards.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Text(
-                          'Aucune commande de carte enregistrée.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppColors.g600,
-                          ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
                         ),
-                      ),
-                    ...recentCards.map((item) {
-                      final clinicName = _clinicName(item);
-                      final nb = _cardCount(item).toString();
-                      final date = _displayDate(
-                        item['createdAt'] ?? item['date'],
-                      );
-                      final status = (item['status'] ?? 'pending').toString();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: AppColors.s100),
-                          ),
+                        decoration: BoxDecoration(
+                          color: AppColors.g50,
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
-                                clinicName,
+                                'CLINIQUE',
                                 style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: AppColors.g800,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g700,
                                 ),
                               ),
                             ),
                             Expanded(
                               child: Text(
-                                nb,
+                                'NB CARTES',
                                 style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: AppColors.g800,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g700,
                                 ),
                               ),
                             ),
                             Expanded(
                               child: Text(
-                                date,
+                                'DATE',
                                 style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: AppColors.g800,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g700,
                                 ),
                               ),
                             ),
                             Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: status == 'pending'
-                                      ? AppColors.warningBg
-                                      : AppColors.g50,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  status == 'pending'
-                                      ? 'En attente'
-                                      : _formatStatus(status),
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: status == 'pending'
-                                        ? AppColors.warning
-                                        : AppColors.g700,
-                                  ),
+                              child: Text(
+                                'STATUT',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g700,
                                 ),
                               ),
                             ),
                             Expanded(
-                              child: Row(
-                                children: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        _showInfoDialog('Commande carte', item),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: AppColors.g700,
-                                      padding: EdgeInsets.zero,
-                                      minimumSize: const Size(0, 0),
-                                    ),
-                                    child: const Text('Voir'),
-                                  ),
-                                  IconButton(
-                                    onPressed: () => _printCard(item),
-                                    icon: const Icon(
-                                      Icons.print_rounded,
-                                      size: 18,
-                                    ),
-                                    color: AppColors.g700,
-                                    tooltip: 'Imprimer la carte',
-                                  ),
-                                  PopupMenuButton<String>(
-                                    tooltip: 'Changer le statut',
-                                    onSelected: (value) =>
-                                        _updateCardStatus(item, value),
-                                    itemBuilder: (context) => const [
-                                      PopupMenuItem(
-                                        value: 'pending',
-                                        child: Text('En attente'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'printing',
-                                        child: Text('Impression'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'shipped',
-                                        child: Text('Expédiée'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'delivered',
-                                        child: Text('Livrée'),
-                                      ),
-                                    ],
-                                    child: const Icon(
-                                      Icons.more_horiz_rounded,
-                                      size: 18,
-                                      color: AppColors.g700,
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                'ACTION',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.g700,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      );
-                    }),
-                  ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (recentCards.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            'Aucune commande de carte enregistrée.',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppColors.g600,
+                            ),
+                          ),
+                        ),
+                      ...recentCards.map((item) {
+                        final clinicName = _clinicName(item);
+                        final nb = _cardCount(item).toString();
+                        final date = _displayDate(
+                          item['createdAt'] ?? item['date'],
+                        );
+                        final status = (item['status'] ?? 'pending').toString();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: AppColors.s100),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  clinicName,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: AppColors.g800,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  nb,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: AppColors.g800,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  date,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: AppColors.g800,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: status == 'pending'
+                                        ? AppColors.warningBg
+                                        : AppColors.g50,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    status == 'pending'
+                                        ? 'En attente'
+                                        : _formatStatus(status),
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: status == 'pending'
+                                          ? AppColors.warning
+                                          : AppColors.g700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    TextButton(
+                                      onPressed: () => _showInfoDialog(
+                                        'Commande carte',
+                                        item,
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.g700,
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(0, 0),
+                                      ),
+                                      child: const Text('Voir'),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => _printCard(item),
+                                      icon: const Icon(
+                                        Icons.print_rounded,
+                                        size: 18,
+                                      ),
+                                      color: AppColors.g700,
+                                      tooltip: 'Imprimer la carte',
+                                    ),
+                                    PopupMenuButton<String>(
+                                      tooltip: 'Changer le statut',
+                                      onSelected: (value) =>
+                                          _updateCardStatus(item, value),
+                                      itemBuilder: (context) => const [
+                                        PopupMenuItem(
+                                          value: 'pending',
+                                          child: Text('En attente'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'printing',
+                                          child: Text('Impression'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'shipped',
+                                          child: Text('Expédiée'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'delivered',
+                                          child: Text('Livrée'),
+                                        ),
+                                      ],
+                                      child: const Icon(
+                                        Icons.more_horiz_rounded,
+                                        size: 18,
+                                        color: AppColors.g700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         );
@@ -1695,46 +1864,61 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.s100),
                     ),
-                    child: Row(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.g50,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            title == 'Pharmacies'
-                                ? Icons.local_pharmacy_rounded
-                                : title == 'Patients'
-                                ? Icons.person_rounded
-                                : title == 'Cartes PVC'
-                                ? Icons.credit_card_rounded
-                                : title == 'Journaux'
-                                ? Icons.history_rounded
-                                : Icons.local_hospital_rounded,
-                            size: 18,
-                            color: AppColors.g700,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.g50,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                title == 'Pharmacies'
+                                    ? Icons.local_pharmacy_rounded
+                                    : title == 'Patients'
+                                    ? Icons.person_rounded
+                                    : title == 'Cartes PVC'
+                                    ? Icons.credit_card_rounded
+                                    : title == 'Journaux'
+                                    ? Icons.history_rounded
+                                    : Icons.local_hospital_rounded,
+                                size: 18,
+                                color: AppColors.g700,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: itemBuilder(item),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: itemBuilder(item),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        if (status.isNotEmpty) _buildStatusChip(status),
-                        const SizedBox(width: 8),
-                        if (actionsBuilder != null) ...actionsBuilder(item),
-                        IconButton(
-                          onPressed: () => _showInfoDialog(title, item),
-                          icon: const Icon(Icons.visibility_rounded, size: 18),
-                          color: AppColors.g700,
-                          tooltip: 'Voir le dossier',
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (status.isNotEmpty) _buildStatusChip(status),
+                            if (actionsBuilder != null) ...actionsBuilder(item),
+                            IconButton(
+                              onPressed: () => _showInfoDialog(title, item),
+                              icon: const Icon(
+                                Icons.visibility_rounded,
+                                size: 18,
+                              ),
+                              color: AppColors.g700,
+                              tooltip: 'Voir les détails',
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1926,6 +2110,265 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
           return _buildSectionContent();
         },
+      ),
+    );
+  }
+}
+
+class _AdminDetailPage extends StatelessWidget {
+  final String title;
+  final Map<String, dynamic> item;
+
+  const _AdminDetailPage({required this.title, required this.item});
+
+  String _text(dynamic value, {String fallback = 'Non renseigné'}) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _date(dynamic value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) return _text(value);
+    return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
+  }
+
+  String _status(dynamic value) {
+    switch (value?.toString()) {
+      case 'approved':
+        return 'Approuvé';
+      case 'pending':
+        return 'En attente';
+      case 'suspended':
+        return 'Suspendu';
+      case 'printing':
+        return 'En impression';
+      case 'shipped':
+        return 'Expédiée';
+      case 'delivered':
+        return 'Livrée';
+      default:
+        return _text(value);
+    }
+  }
+
+  String _patientName(Map<String, dynamic>? patient) {
+    if (patient == null) return 'Patient non renseigné';
+    final fullName = '${patient['prenom'] ?? ''} ${patient['nom'] ?? ''}'
+        .trim();
+    return fullName.isEmpty ? 'Patient non renseigné' : fullName;
+  }
+
+  List<_AdminDetailField> _fields() {
+    if (title == 'Patients') {
+      final allergies = (item['allergies'] as List? ?? const [])
+          .map((value) => value.toString())
+          .join(', ');
+      return [
+        _AdminDetailField('Nom complet', _patientName(item)),
+        _AdminDetailField('N° dossier', _text(item['dossierNumber'])),
+        _AdminDetailField('Date de naissance', _date(item['dateNaissance'])),
+        _AdminDetailField('Sexe', _text(item['sexe'])),
+        _AdminDetailField('Téléphone', _text(item['telephone'])),
+        _AdminDetailField('Adresse', _text(item['adresse'])),
+        _AdminDetailField('Groupe sanguin', _text(item['groupeSanguin'])),
+        _AdminDetailField(
+          'Allergies',
+          allergies.isEmpty ? 'Aucune allergie connue' : allergies,
+        ),
+        _AdminDetailField('Carte physique', _status(item['carteStatus'])),
+        _AdminDetailField('Dossier créé le', _date(item['createdAt'])),
+      ];
+    }
+
+    if (title == 'Commande de carte') {
+      final clinic = item['clinique'] is Map
+          ? Map<String, dynamic>.from(item['clinique'])
+          : null;
+      final patients = item['patients'] as List? ?? const [];
+      final patient = patients.isNotEmpty && patients.first is Map
+          ? Map<String, dynamic>.from(patients.first)
+          : null;
+      return [
+        _AdminDetailField('Clinique', _text(clinic?['nom'])),
+        _AdminDetailField('Patient', _patientName(patient)),
+        _AdminDetailField('Nombre de cartes', _text(item['nombreCartes'])),
+        _AdminDetailField('Statut', _status(item['status'])),
+        _AdminDetailField('Commande créée le', _date(item['createdAt'])),
+        _AdminDetailField('Livrée le', _date(item['deliveredAt'])),
+      ];
+    }
+
+    if (title == 'Journaux') {
+      final user = item['user'] is Map ? item['user'] as Map : null;
+      return [
+        _AdminDetailField('Action', _text(item['action'])),
+        _AdminDetailField('Description', _text(item['details'])),
+        _AdminDetailField('Utilisateur', _text(user?['email'])),
+        _AdminDetailField(
+          'Date',
+          _date(item['timestamp'] ?? item['createdAt']),
+        ),
+      ];
+    }
+
+    final type = title == 'Pharmacies' ? 'Pharmacie' : title;
+    return [
+      _AdminDetailField('Nom', _text(item['nom'], fallback: '$type sans nom')),
+      _AdminDetailField('Responsable', _text(item['responsable'])),
+      _AdminDetailField('N° autorisation', _text(item['numeroAutorisation'])),
+      _AdminDetailField('Email', _text(item['email'])),
+      _AdminDetailField('Téléphone', _text(item['telephone'])),
+      _AdminDetailField('Adresse', _text(item['adresse'])),
+      _AdminDetailField('Ville', _text(item['ville'])),
+      if (item['type'] != null)
+        _AdminDetailField('Type de structure', _text(item['type'])),
+      _AdminDetailField('Statut', _status(item['status'])),
+      _AdminDetailField('Créé le', _date(item['createdAt'])),
+      _AdminDetailField('Approuvé le', _date(item['approvedAt'])),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = _fields();
+    final titleLabel = title == 'Hôpital' ? 'Établissement' : title;
+    return Scaffold(
+      backgroundColor: AppColors.s50,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.s800,
+        elevation: 0,
+        title: Text(
+          'Détails $titleLabel',
+          style: GoogleFonts.syne(fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppColors.g800,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            title == 'Patients'
+                                ? Icons.person_rounded
+                                : title == 'Pharmacies'
+                                ? Icons.local_pharmacy_rounded
+                                : title == 'Commande de carte'
+                                ? Icons.credit_card_rounded
+                                : Icons.local_hospital_rounded,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            title == 'Patients'
+                                ? _patientName(item)
+                                : _text(item['nom'], fallback: titleLabel),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.syne(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.s100),
+                    ),
+                    child: Column(
+                      children: fields
+                          .map((field) => _AdminDetailRow(field: field))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminDetailField {
+  final String label;
+  final String value;
+
+  const _AdminDetailField(this.label, this.value);
+}
+
+class _AdminDetailRow extends StatelessWidget {
+  final _AdminDetailField field;
+
+  const _AdminDetailRow({required this.field});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.s100)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              field.label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: AppColors.s500,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              field.value,
+              softWrap: true,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.s800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

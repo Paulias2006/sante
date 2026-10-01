@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/config/app_constants.dart';
 import 'package:sante/providers/auth_provider.dart';
@@ -389,6 +390,15 @@ class SanteDashboardShell extends ConsumerWidget {
     );
   }
 
+  Future<void> _openHelp(BuildContext context) async {
+    final uri = Uri.parse('tel:93014749');
+    if (await launchUrl(uri)) return;
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Appelez le support au 93014749.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scaffoldKey = GlobalKey<ScaffoldState>();
@@ -474,9 +484,9 @@ class SanteDashboardShell extends ConsumerWidget {
           : null,
       bottomNavigationBar: !isDesktop && mobileBottomItems != null
           ? NavigationBar(
-              selectedIndex: mobileBottomItems!.indexWhere(
-                (item) => item.selected,
-              ).clamp(0, mobileBottomItems!.length - 1),
+              selectedIndex: mobileBottomItems!
+                  .indexWhere((item) => item.selected)
+                  .clamp(0, mobileBottomItems!.length - 1),
               onDestinationSelected: (index) =>
                   mobileBottomItems![index].onTap(),
               backgroundColor: Colors.white,
@@ -493,6 +503,13 @@ class SanteDashboardShell extends ConsumerWidget {
                   .toList(),
             )
           : null,
+      floatingActionButton: FloatingActionButton.small(
+        onPressed: () => _openHelp(context),
+        tooltip: 'Support SantéTogo',
+        backgroundColor: AppColors.g700,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.support_agent_rounded),
+      ),
       body: SafeArea(
         child: isDesktop
             ? Center(
