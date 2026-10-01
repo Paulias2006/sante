@@ -186,6 +186,44 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
+  Future<void> _sharePatientQr() async {
+    final value = (_patient['qrToken'] ?? _patient['dossierNumber'] ?? '').toString();
+    if (value.isEmpty) return;
+    final painter = QrPainter(
+      data: value,
+      version: QrVersions.auto,
+      gapless: true,
+    );
+    final imageData = await painter.toImageData(900);
+    if (imageData == null) return;
+    final document = pw.Document();
+    document.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (_) => pw.Center(
+          child: pw.Column(
+            mainAxisSize: pw.MainAxisSize.min,
+            children: [
+              pw.Text('SantéTogo - QR Code santé'),
+              pw.SizedBox(height: 18),
+              pw.Image(
+                pw.MemoryImage(imageData.buffer.asUint8List()),
+                width: 260,
+                height: 260,
+              ),
+              pw.SizedBox(height: 12),
+              pw.Text('Dossier ${_patient['dossierNumber'] ?? '—'}'),
+            ],
+          ),
+        ),
+      ),
+    );
+    await Printing.sharePdf(
+      bytes: await document.save(),
+      filename: 'sante-togo-qr-${_patient['dossierNumber'] ?? 'patient'}.pdf',
+    );
+  }
+
   void _showDossierDetail(String title, String value) {
     showDialog(
       context: context,
@@ -1394,6 +1432,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   icon: Icons.lock_outline_rounded,
                   title: 'Sécurité',
                   subtitle: 'Session protégée par votre compte',
+                  onTap: _changePassword,
                 ),
                 _settingsAction(
                   icon: Icons.notifications_none_rounded,
@@ -1423,6 +1462,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   icon: Icons.share_rounded,
                   title: 'Partage de données',
                   subtitle: 'Le partage se fait uniquement via un QR valide',
+                  onTap: () => _openPatientSection(5),
                 ),
                 _settingsAction(
                   icon: Icons.shield_outlined,
@@ -1459,14 +1499,56 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _settingsAction({required IconData icon, required String title, required String subtitle, Widget? trailing}) {
+  Widget _settingsAction({required IconData icon, required String title, required String subtitle, Widget? trailing, VoidCallback? onTap}) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon, color: AppColors.g700),
       title: Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.s800)),
       subtitle: Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: AppColors.s500)),
       trailing: trailing ?? const Icon(Icons.chevron_right_rounded, color: AppColors.s400),
+      onTap: onTap,
     );
+  }
+
+  Future<void> _changePassword() async {
+    final current = TextEditingController();
+    final next = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Modifier le mot de passe'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: current, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe actuel')),
+            TextField(controller: next, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe (8 caractères minimum)')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Modifier')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      current.dispose();
+      next.dispose();
+      return;
+    }
+    try {
+      await ref.read(apiServiceProvider).updatePassword(
+        currentPassword: current.text,
+        newPassword: next.text,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mot de passe modifié.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    } finally {
+      current.dispose();
+      next.dispose();
+    }
   }
 
   Future<void> _editPatientProfile() async {
@@ -2325,6 +2407,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.g700,
                       ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _sharePatientQr,
+                      icon: const Icon(Icons.share_rounded, size: 16),
+                      label: const Text('Partager'),
                     ),
                   ],
                 ),

@@ -93,6 +93,36 @@ router.post('/logout', async (req, res) => {
   res.json({ message: 'Déconnexion réussie' });
 });
 
+router.patch('/password', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return fail(res, 'Token requis', 401);
+  }
+
+  try {
+    const { userId } = verifyAccessToken(authHeader.split(' ')[1]);
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return fail(res, 'Mot de passe actuel et nouveau mot de passe de 8 caractères requis', 400);
+    }
+    const user = await User.findById(userId);
+    if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      return fail(res, 'Mot de passe actuel incorrect', 401);
+    }
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+    await logAction({
+      user: user._id,
+      action: 'UPDATE_PASSWORD',
+      details: 'Mot de passe modifié depuis le profil',
+      ipAddress: req.ip,
+    });
+    return res.json({ message: 'Mot de passe modifié avec succès' });
+  } catch (error) {
+    return fail(res, 'Erreur modification mot de passe', 500);
+  }
+});
+
 router.get('/me', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

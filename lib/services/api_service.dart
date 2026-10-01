@@ -155,6 +155,22 @@ class ApiService {
     }
   }
 
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _dio.patch(
+      '/auth/password',
+      data: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception(response.data['message'] ?? 'Mot de passe non modifié');
+    }
+  }
+
   // Patient endpoints
   Future<Map<String, dynamic>> getPatientDossier(
     String patientId, {
