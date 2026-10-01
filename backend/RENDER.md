@@ -6,7 +6,7 @@ and deploys the backend from `backend/`.
 Required secret to set in Render:
 
 - `MONGODB_URI`: MongoDB Atlas connection string.
-- `CORS_ORIGIN`: the exact browser origin(s) allowed to call the API, comma-separated. Leave native Flutter clients without an origin; do not use `*`.
+- `CORS_ORIGIN`: currently `https://sante-vq36.onrender.com`; replace it later with the exact browser frontend origin when one exists. Native Flutter clients do not send an origin.
 
 Render will generate:
 

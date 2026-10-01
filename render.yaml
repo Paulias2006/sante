@@ -24,4 +24,4 @@ services:
       - key: JWT_REFRESH_EXPIRY
         value: 7d
       - key: CORS_ORIGIN
-        sync: false
+        value: https://sante-vq36.onrender.com
