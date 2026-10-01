@@ -72,8 +72,10 @@ class _PharmacyDashboardScreenState
         _settingsNameController.text = (entite['nom'] ?? '').toString();
         _settingsAddressController.text = (entite['adresse'] ?? '').toString();
         _settingsCityController.text = (entite['ville'] ?? '').toString();
-        _settingsPhoneController.text = (entite['telephone'] ?? user['telephone'] ?? '').toString();
-        _settingsEmailController.text = (entite['email'] ?? user['email'] ?? '').toString();
+        _settingsPhoneController.text =
+            (entite['telephone'] ?? user['telephone'] ?? '').toString();
+        _settingsEmailController.text = (entite['email'] ?? user['email'] ?? '')
+            .toString();
         _settingsReady = true;
       });
     } catch (error) {
@@ -442,26 +444,66 @@ class _PharmacyDashboardScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Paramètres', style: GoogleFonts.syne(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.g800)),
+          Text(
+            'Paramètres',
+            style: GoogleFonts.syne(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: AppColors.g800,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text('Informations de la pharmacie et du compte connecté.', style: GoogleFonts.inter(color: AppColors.g600)),
+          Text(
+            'Informations de la pharmacie et du compte connecté.',
+            style: GoogleFonts.inter(color: AppColors.g600),
+          ),
           const SizedBox(height: 18),
           _settingsPanel(
             title: 'Compte utilisateur',
             children: [
-              _settingsField(_settingsFirstNameController, 'Prénom', Icons.person_rounded),
-              _settingsField(_settingsLastNameController, 'Nom', Icons.badge_rounded),
-              _settingsField(_settingsEmailController, 'Email', Icons.email_rounded, keyboardType: TextInputType.emailAddress),
+              _settingsField(
+                _settingsFirstNameController,
+                'Prénom',
+                Icons.person_rounded,
+              ),
+              _settingsField(
+                _settingsLastNameController,
+                'Nom',
+                Icons.badge_rounded,
+              ),
+              _settingsField(
+                _settingsEmailController,
+                'Email',
+                Icons.email_rounded,
+                keyboardType: TextInputType.emailAddress,
+              ),
             ],
           ),
           const SizedBox(height: 14),
           _settingsPanel(
             title: 'Pharmacie',
             children: [
-              _settingsField(_settingsNameController, 'Nom de la pharmacie', Icons.local_pharmacy_rounded),
-              _settingsField(_settingsAddressController, 'Adresse', Icons.location_on_rounded),
-              _settingsField(_settingsCityController, 'Ville', Icons.location_city_rounded),
-              _settingsField(_settingsPhoneController, 'Téléphone', Icons.phone_rounded, keyboardType: TextInputType.phone),
+              _settingsField(
+                _settingsNameController,
+                'Nom de la pharmacie',
+                Icons.local_pharmacy_rounded,
+              ),
+              _settingsField(
+                _settingsAddressController,
+                'Adresse',
+                Icons.location_on_rounded,
+              ),
+              _settingsField(
+                _settingsCityController,
+                'Ville',
+                Icons.location_city_rounded,
+              ),
+              _settingsField(
+                _settingsPhoneController,
+                'Téléphone',
+                Icons.phone_rounded,
+                keyboardType: TextInputType.phone,
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -470,7 +512,14 @@ class _PharmacyDashboardScreenState
             child: FilledButton.icon(
               onPressed: _savingSettings ? null : _savePharmacySettings,
               icon: _savingSettings
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.save_rounded),
               label: const Text('Enregistrer les paramètres'),
             ),
@@ -480,26 +529,61 @@ class _PharmacyDashboardScreenState
     );
   }
 
-  Widget _settingsPanel({required String title, required List<Widget> children}) {
+  Widget _settingsPanel({
+    required String title,
+    required List<Widget> children,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: AppColors.s100), borderRadius: BorderRadius.circular(16)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.g800)),
-        const SizedBox(height: 12),
-        LayoutBuilder(builder: (context, constraints) {
-          final width = constraints.maxWidth >= 680 ? (constraints.maxWidth - 12) / 2 : constraints.maxWidth;
-          return Wrap(spacing: 12, runSpacing: 12, children: children.map((child) => SizedBox(width: width, child: child)).toList());
-        }),
-      ]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppColors.s100),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              color: AppColors.g800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth >= 680
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: children
+                    .map((child) => SizedBox(width: width, child: child))
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _settingsField(TextEditingController controller, String label, IconData icon, {TextInputType? keyboardType}) {
+  Widget _settingsField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: const OutlineInputBorder()),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
     );
   }
 
