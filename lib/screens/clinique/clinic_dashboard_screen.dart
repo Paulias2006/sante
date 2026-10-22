@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
 import 'package:sante/widgets/sante_shell.dart';
+import 'package:sante/screens/clinique/clinic_mobile_design.dart';
 
 class ClinicDashboardScreen extends ConsumerStatefulWidget {
   const ClinicDashboardScreen({super.key});
@@ -373,6 +374,27 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
       'admin' => 'Administrateur',
       _ => 'Clinique',
     };
+
+    if (MediaQuery.sizeOf(context).width < 900 &&
+        !_loading &&
+        _loadError == null) {
+      return ClinicMobileExperience(
+        userName: userName,
+        patients: _patients,
+        consultations: _consultations,
+        ordonnances: _ordonnances,
+        appointments: _appointments,
+        onRefresh: _loadData,
+        onOpenPatient: (patientId) => _openPatientById(patientId),
+        onScanPatient: _openCameraCardScanner,
+        onNewPatient: _openNewPatientDialog,
+        onNewAppointment: () => _createRendezVousDialog(),
+        onSettings: () {
+          setState(() => _selectedTabIndex = 6);
+          _prepareSettingsForm();
+        },
+      );
+    }
 
     final navItems = [
       SanteDashboardNavItem(

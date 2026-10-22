@@ -15,6 +15,7 @@ const analyseRoutes = require('./routes/analyses');
 const rendezVousRoutes = require('./routes/rendezvous');
 const pharmacieRoutes = require('./routes/pharmacies');
 const inscriptionRoutes = require('./routes/inscription');
+const directoryRoutes = require('./routes/directory');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,6 +52,7 @@ const authLimiter = rateLimit({
 
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/inscription', inscriptionRoutes);
+app.use('/api/directory', authenticate, directoryRoutes);
 app.use('/api/admin', authenticate, adminRoutes);
 app.use('/api/patients', authenticate, patientRoutes);
 app.use('/api/consultations', authenticate, consultationRoutes);

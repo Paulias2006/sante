@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import 'package:sante/config/app_colors.dart';
 import 'package:sante/providers/auth_provider.dart';
 import 'package:sante/widgets/sante_shell.dart';
+import 'package:sante/screens/pharmacie/pharmacy_mobile_design.dart';
 
 class PharmacyDashboardScreen extends ConsumerStatefulWidget {
   const PharmacyDashboardScreen({super.key});
@@ -353,6 +354,23 @@ class _PharmacyDashboardScreenState
     final userName = currentUser?.fullName.trim().isNotEmpty == true
         ? currentUser!.fullName
         : 'Pharmacie';
+
+    if (MediaQuery.sizeOf(context).width < 900 && !_loading) {
+      return PharmacyMobileExperience(
+        userName: userName,
+        deliveries: _deliveries,
+        stats: _stats,
+        scanResult: _scanResult,
+        onRefresh: _loadData,
+        onScan: _openCameraScanner,
+        onConfirmDelivery: _confirmDelivery,
+        onSettings: () {
+          setState(() => _selectedTabIndex = 3);
+          _loadPharmacySettings();
+        },
+        onExport: _exportDeliveries,
+      );
+    }
 
     final navItems = [
       SanteDashboardNavItem(

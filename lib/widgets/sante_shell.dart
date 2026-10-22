@@ -15,6 +15,7 @@ class SanteBrandLogo extends StatelessWidget {
   final bool onDark;
   final double emblemSize;
   final double titleFontSize;
+  final double? wordmarkWidth;
 
   const SanteBrandLogo({
     super.key,
@@ -22,12 +23,13 @@ class SanteBrandLogo extends StatelessWidget {
     this.onDark = false,
     this.emblemSize = 64,
     this.titleFontSize = 18,
+    this.wordmarkWidth,
   });
 
   @override
   Widget build(BuildContext context) {
     if (withWordmark) {
-      final width = emblemSize * 3.4;
+      final width = wordmarkWidth ?? emblemSize * 3.4;
       return SizedBox(
         width: width,
         height: width / (2048 / 768),

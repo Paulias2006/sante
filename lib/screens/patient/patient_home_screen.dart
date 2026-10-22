@@ -15,6 +15,7 @@ import 'package:sante/widgets/sante_shell.dart';
 import 'package:sante/services/notification_service.dart';
 import 'package:sante/services/local_storage_service.dart';
 import 'package:sante/services/biometric_service.dart';
+import 'package:sante/screens/patient/patient_mobile_design.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -759,6 +760,30 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   Widget build(BuildContext context) {
     final currentUser = ref.watch(authStateProvider).valueOrNull;
     final userName = _userName.trim().isNotEmpty ? _userName : 'Patient';
+
+    if (MediaQuery.sizeOf(context).width < 900 &&
+        !_loading &&
+        !_missingPatientLink &&
+        _loadError == null) {
+      return PatientMobileExperience(
+        patient: _patient,
+        ordonnances: _ordonnances,
+        consultations: _consultations,
+        analyses: _analyses,
+        delivrances: _delivrances,
+        cardOrders: _cardOrders,
+        userName: userName,
+        onRefresh: _loadPatientData,
+        onRotateQr: _rotatePatientQr,
+        onRevokeQr: _revokePatientQr,
+        onShareQr: _sharePatientQr,
+        onOrderCard: _orderPhysicalCard,
+        onChangePassword: _changePassword,
+        onLogout: () => ref.read(authStateProvider.notifier).logout(),
+        biometricEnabled: _biometricEnabled,
+        notificationsEnabled: currentUser?.notificationsEnabled ?? true,
+      );
+    }
 
     final navItems = [
       SanteDashboardNavItem(
@@ -1816,6 +1841,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   Future<void> _changePassword() async {
     final current = TextEditingController();
     final next = TextEditingController();
+    final confirmation = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1837,6 +1863,13 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 labelText: 'Nouveau mot de passe (8 caractères minimum)',
               ),
             ),
+            TextField(
+              controller: confirmation,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirmer le nouveau mot de passe',
+              ),
+            ),
           ],
         ),
         actions: [
@@ -1854,6 +1887,35 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     if (confirmed != true || !mounted) {
       current.dispose();
       next.dispose();
+      confirmation.dispose();
+      return;
+    }
+    if (current.text.isEmpty || next.text.length < 8) {
+      current.dispose();
+      next.dispose();
+      confirmation.dispose();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Le nouveau mot de passe doit contenir au moins 8 caractères.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (next.text != confirmation.text) {
+      current.dispose();
+      next.dispose();
+      confirmation.dispose();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Les deux nouveaux mots de passe sont différents.'),
+          ),
+        );
+      }
       return;
     }
     try {
@@ -1877,6 +1939,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     } finally {
       current.dispose();
       next.dispose();
+      confirmation.dispose();
     }
   }
 

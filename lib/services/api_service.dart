@@ -88,6 +88,22 @@ class ApiService {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getPatientDirectory(
+    String type, {
+    String? search,
+  }) async {
+    final response = await _dio.get(
+      '/directory/$type',
+      queryParameters: search == null || search.trim().isEmpty
+          ? {}
+          : {'search': search.trim()},
+    );
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(response.data ?? []);
+    }
+    throw Exception(response.data['message'] ?? 'Annuaire indisponible');
+  }
+
   Future<Map<String, dynamic>> registerPatient(
     Map<String, dynamic> payload,
   ) async {
