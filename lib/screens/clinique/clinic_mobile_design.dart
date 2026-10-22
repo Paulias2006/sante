@@ -15,6 +15,7 @@ class ClinicMobileExperience extends StatefulWidget {
   final VoidCallback onNewPatient;
   final VoidCallback onNewAppointment;
   final VoidCallback onSettings;
+  final Future<void> Function() onLogout;
 
   const ClinicMobileExperience({
     super.key,
@@ -29,6 +30,7 @@ class ClinicMobileExperience extends StatefulWidget {
     required this.onNewPatient,
     required this.onNewAppointment,
     required this.onSettings,
+    required this.onLogout,
   });
 
   @override
@@ -165,9 +167,15 @@ class _ClinicMobileExperienceState extends State<ClinicMobileExperience>
       opacity: CurvedAnimation(parent: _intro, curve: Curves.easeOut),
       child: RefreshIndicator(
         onRefresh: widget.onRefresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-          children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) => ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
             _header('Espace clinique', 'Suivi de votre établissement'),
             _hero(),
             const SizedBox(height: 14),
@@ -222,7 +230,11 @@ class _ClinicMobileExperienceState extends State<ClinicMobileExperience>
             const SizedBox(height: 8),
             _section('Patients récents', () => _go('patients')),
             ...widget.patients.take(4).map(_patientTile),
-          ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -444,6 +456,27 @@ class _ClinicMobileExperienceState extends State<ClinicMobileExperience>
           widget.onSettings,
           AppColors.g100,
         ),
+        _action(
+          Icons.security_rounded,
+          'Sécurité du compte',
+          'Gérer vos accès depuis votre espace sécurisé',
+          widget.onSettings,
+          AppColors.blueBg,
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: widget.onLogout,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Se déconnecter'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: BorderSide(color: AppColors.danger.withValues(alpha: .35)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
       ]);
 
   Widget _pageScaffold(
@@ -451,13 +484,23 @@ class _ClinicMobileExperienceState extends State<ClinicMobileExperience>
     String subtitle,
     List<Widget> children, {
     String back = 'home',
-  }) => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-    children: [
-      _header(title, subtitle, back: () => _go(back)),
-      const SizedBox(height: 8),
-      ...children,
-    ],
+  }) => LayoutBuilder(
+    builder: (context, constraints) => ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+      children: [
+        ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(title, subtitle, back: () => _go(back)),
+              const SizedBox(height: 8),
+              ...children,
+            ],
+          ),
+        ),
+      ],
+    ),
   );
   Widget _action(
     IconData icon,

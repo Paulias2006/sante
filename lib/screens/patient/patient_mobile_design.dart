@@ -357,9 +357,15 @@ class _PatientMobileExperienceState extends State<PatientMobileExperience>
       child: RefreshIndicator(
         onRefresh: widget.onRefresh,
         color: AppColors.g700,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-          children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) => ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
             _buildHeader(title: 'Accueil'),
             _buildHeroCard(greeting),
             const SizedBox(height: 16),
@@ -403,7 +409,11 @@ class _PatientMobileExperienceState extends State<PatientMobileExperience>
             _buildInfoGrid(),
             const SizedBox(height: 12),
             _buildPrivacyBanner(),
-          ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2300,17 +2310,27 @@ class _PatientMobileExperienceState extends State<PatientMobileExperience>
     String subtitle,
     List<Widget> children, {
     String backPage = 'home',
-  }) => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-    children: [
-      _buildHeader(
-        title: title,
-        subtitle: subtitle,
-        onBack: () => _go(backPage),
-      ),
-      const SizedBox(height: 8),
-      ...children,
-    ],
+  }) => LayoutBuilder(
+    builder: (context, constraints) => ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+      children: [
+        ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeader(
+                title: title,
+                subtitle: subtitle,
+                onBack: () => _go(backPage),
+              ),
+              const SizedBox(height: 8),
+              ...children,
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _buildBottomNavigation() {

@@ -15,7 +15,7 @@ class ApiService {
         connectTimeout: const Duration(seconds: 8),
         receiveTimeout: const Duration(seconds: 15),
         contentType: Headers.jsonContentType,
-        validateStatus: (status) => status != null && status < 500,
+        validateStatus: (status) => status != null && status < 400,
       ),
     );
 
@@ -25,6 +25,7 @@ class ApiService {
 
   late Dio _dio;
   SharedPreferences? _prefs;
+  Future<Map<String, dynamic>>? _refreshInFlight;
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -126,6 +127,17 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> refreshToken() async {
+    if (_refreshInFlight != null) return _refreshInFlight!;
+    final future = _refreshTokenOnce();
+    _refreshInFlight = future;
+    try {
+      return await future;
+    } finally {
+      _refreshInFlight = null;
+    }
+  }
+
+  Future<Map<String, dynamic>> _refreshTokenOnce() async {
     final refreshToken = getRefreshToken();
     if (refreshToken == null) throw Exception('No refresh token');
 
@@ -597,9 +609,28 @@ class _TokenInterceptor extends Interceptor {
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (err.response?.statusCode == 401) {
-      // Try to refresh token
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final request = err.requestOptions;
+    final canRefresh =
+        err.response?.statusCode == 401 &&
+        request.extra['authRetry'] != true &&
+        request.path != '/auth/login' &&
+        request.path != '/auth/refresh' &&
+        apiService.getRefreshToken()?.isNotEmpty == true;
+
+    if (canRefresh) {
+      try {
+        await apiService.refreshToken();
+        request.extra['authRetry'] = true;
+        request.headers['Authorization'] =
+            'Bearer ${apiService.getAccessToken()}';
+        return handler.resolve(await apiService._dio.fetch(request));
+      } catch (_) {
+        await apiService.clearTokens();
+      }
     }
     handler.next(err);
   }

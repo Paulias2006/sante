@@ -12,6 +12,7 @@ class PharmacyMobileExperience extends StatefulWidget {
   final VoidCallback onScan;
   final Future<void> Function() onConfirmDelivery;
   final VoidCallback onSettings;
+  final Future<void> Function() onLogout;
   final Future<void> Function() onExport;
 
   const PharmacyMobileExperience({
@@ -24,6 +25,7 @@ class PharmacyMobileExperience extends StatefulWidget {
     required this.onScan,
     required this.onConfirmDelivery,
     required this.onSettings,
+    required this.onLogout,
     required this.onExport,
   });
 
@@ -118,9 +120,15 @@ class _PharmacyMobileExperienceState extends State<PharmacyMobileExperience> {
   Widget _homePage() {
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-        children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
           _header('Espace pharmacie', 'Délivrance sécurisée des ordonnances'),
           Container(
             padding: const EdgeInsets.all(19),
@@ -206,7 +214,11 @@ class _PharmacyMobileExperienceState extends State<PharmacyMobileExperience> {
             const SizedBox(height: 14),
             _scanCard(),
           ],
-        ],
+                ],
+              ),
+            ),
+          ],
+      ),
       ),
     );
   }
@@ -311,15 +323,46 @@ class _PharmacyMobileExperienceState extends State<PharmacyMobileExperience> {
       widget.onSettings,
       AppColors.g100,
     ),
+    _action(
+      Icons.security_rounded,
+      'Sécurité du compte',
+      'Gérer vos accès depuis votre espace sécurisé',
+      widget.onSettings,
+      AppColors.blueBg,
+    ),
+    const SizedBox(height: 10),
+    SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: widget.onLogout,
+        icon: const Icon(Icons.logout_rounded),
+        label: const Text('Se déconnecter'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.danger,
+          side: BorderSide(color: AppColors.danger.withValues(alpha: .35)),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    ),
   ]);
   Widget _pageScaffold(String title, String subtitle, List<Widget> children) =>
-      ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
-        children: [
-          _header(title, subtitle, back: () => _go('home')),
-          const SizedBox(height: 8),
-          ...children,
-        ],
+      LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _header(title, subtitle, back: () => _go('home')),
+                  const SizedBox(height: 8),
+                  ...children,
+                ],
+              ),
+            ),
+          ],
+        ),
       );
 
   Widget _action(

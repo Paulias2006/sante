@@ -368,6 +368,7 @@ class _PharmacyDashboardScreenState
           setState(() => _selectedTabIndex = 3);
           _loadPharmacySettings();
         },
+        onLogout: () => ref.read(authStateProvider.notifier).logout(),
         onExport: _exportDeliveries,
       );
     }

@@ -53,10 +53,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         state = AsyncValue.data(user);
         return;
       } catch (_) {
-        if (cachedUser != null) {
-          state = AsyncValue.data(User.fromJson(cachedUser));
-          return;
-        }
         await apiService.clearTokens();
         await LocalStorageService.clearUserData();
         state = const AsyncValue.data(null);

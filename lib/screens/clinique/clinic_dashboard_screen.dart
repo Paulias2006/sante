@@ -393,6 +393,7 @@ class _ClinicDashboardScreenState extends ConsumerState<ClinicDashboardScreen> {
           setState(() => _selectedTabIndex = 6);
           _prepareSettingsForm();
         },
+        onLogout: () => ref.read(authStateProvider.notifier).logout(),
       );
     }
 
